@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Standalone chat window, launched from the overview result. Runs in its own
 // process so GTK never shares a main loop with the shell's Clutter loop.
 
@@ -15,7 +16,7 @@ import {ChatStore, titleFor} from './lib/chatStore.js';
 import {ModelWatch, formatModelState} from './lib/modelWatch.js';
 import {parseMarkdown, escapeMarkup, inlineToPango} from './lib/markdown.js';
 
-const UUID = 'ai-search@local';
+const UUID = 'ai-search@alexdlukens.github.io';
 const SCHEMA_ID = 'org.gnome.shell.extensions.ai-search';
 const APP_ID = 'org.gnome.Shell.Extensions.AiSearch.Chat';
 const FLUSH_INTERVAL_MS = 60;

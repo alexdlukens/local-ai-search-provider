@@ -1,19 +1,23 @@
-UUID = ai-search@local
+UUID = ai-search@alexdlukens.github.io
 EXTENSION_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 APPLICATIONS_DIR = $(HOME)/.local/share/applications
 DESKTOP_FILE = org.gnome.Shell.Extensions.AiSearch.Chat.desktop
 GJS ?= $(shell command -v gjs || echo gjs)
 
-.PHONY: all schemas install install-desktop enable pack clean
+.PHONY: all schemas check install install-desktop enable pack clean uninstall
 
 all: schemas
 
 schemas:
 	glib-compile-schemas schemas
 
+check: schemas
+	glib-compile-schemas --strict --dry-run schemas
+	$(MAKE) pack
+
 install: schemas
 	mkdir -p $(EXTENSION_DIR)
-	cp -r metadata.json extension.js prefs.js chatWindow.js searchProvider.js lib schemas stylesheet.css README.md $(EXTENSION_DIR)/
+	cp -r metadata.json extension.js prefs.js chatWindow.js searchProvider.js lib schemas stylesheet.css README.md LICENSE CHANGELOG.md SECURITY.md CONTRIBUTING.md docs $(EXTENSION_DIR)/
 	glib-compile-schemas $(EXTENSION_DIR)/schemas
 	$(MAKE) install-desktop
 
@@ -35,6 +39,11 @@ pack: schemas
 		--extra-source=lib \
 		--schema=schemas/org.gnome.shell.extensions.ai-search.gschema.xml \
 		--extra-source=README.md \
+		--extra-source=LICENSE \
+		--extra-source=CHANGELOG.md \
+		--extra-source=SECURITY.md \
+		--extra-source=CONTRIBUTING.md \
+		--extra-source=docs \
 		.
 
 clean:

@@ -1,3 +1,8 @@
 schemas/gschemas.compiled
+schemas/gschemas.compiled.*
 dist/
 *.zip
+*.log
+.DS_Store
+.vscode/
+.idea/
