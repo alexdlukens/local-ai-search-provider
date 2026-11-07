@@ -22,7 +22,7 @@
     </key>
 
     <key name="system-prompt" type="s">
-      <default>'You are a helpful AI assistant embedded in GNOME Shell. Answer in plain text and be concise. Avoid Markdown tables and long code blocks. Use the available tools when they help.'</default>
+      <default>'You are a helpful AI assistant embedded in GNOME Shell. Answer in GitHub-flavored Markdown and be concise. Use headings, **bold**, *italic*, `inline code`, fenced code blocks with a language tag, lists, blockquotes, and tables when they make the answer clearer. Use the available tools when they help.'</default>
       <summary>System prompt</summary>
       <description>Instruction prepended to every query.</description>
     </key>

@@ -13,6 +13,7 @@ import {runChat, buildMessages} from './lib/chatEngine.js';
 import {buildToolRegistry} from './lib/toolRegistry.js';
 import {ChatStore, titleFor} from './lib/chatStore.js';
 import {ModelWatch, formatModelState} from './lib/modelWatch.js';
+import {parseMarkdown, escapeMarkup, inlineToPango} from './lib/markdown.js';
 
 const UUID = 'ai-search@local';
 const SCHEMA_ID = 'org.gnome.shell.extensions.ai-search';
@@ -59,6 +60,33 @@ function installCss() {
         }
         .ai-chat-history-title {
             font-weight: bold;
+        }
+        .ai-chat-code {
+            background-color: @card_bg_color;
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+        .ai-chat-code-text {
+            font-family: monospace;
+        }
+        .ai-chat-code-lang {
+            font-size: 0.85em;
+        }
+        .ai-chat-quote {
+            border-left: 3px solid @accent_bg_color;
+            padding-left: 10px;
+            opacity: 0.9;
+        }
+        .ai-chat-table {
+            background-color: @card_bg_color;
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+        .ai-chat-table-header {
+            font-weight: bold;
+        }
+        .ai-chat-list-marker {
+            min-width: 18px;
         }
     `);
     Gtk.StyleContext.add_provider_for_display(
@@ -590,22 +618,22 @@ class ChatWindow {
         });
         box.append(toolsBox);
 
-        const content = new Gtk.Label({
-            label: '',
-            wrap: true,
-            selectable: true,
-            xalign: 0,
+        const contentBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 6,
             hexpand: true,
         });
-        content.add_css_class('ai-chat-assistant');
-        box.append(content);
+        contentBox.add_css_class('ai-chat-assistant');
+        box.append(contentBox);
 
         this._messagesBox.append(box);
         this._current = {
             box,
             reasoning,
             toolsBox,
-            content,
+            contentBox,
+            blocks: [],
+            lastAnswer: '',
             answer: '',
             reasoningText: '',
             reasoningActive: false,
@@ -677,9 +705,15 @@ class ChatWindow {
             return;
         current.failed = true;
         current.reasoning.set_visible(false);
-        current.content.set_text(message);
-        current.content.add_css_class('error');
-        current.content.set_visible(true);
+
+        for (const entry of current.blocks)
+            current.contentBox.remove(entry.widget);
+        current.blocks = [];
+        current.lastAnswer = message;
+
+        const label = this._makeMarkdownLabel(escapeMarkup(message));
+        label.add_css_class('error');
+        current.contentBox.append(label);
         this._current = null;
     }
 
@@ -738,11 +772,197 @@ class ChatWindow {
         const stick = this._isAtBottom();
         if (current.reasoning.get_text() !== current.reasoningText)
             current.reasoning.set_text(current.reasoningText);
-        if (current.content.get_text() !== current.answer)
-            current.content.set_text(current.answer);
+        if (current.lastAnswer !== current.answer) {
+            current.lastAnswer = current.answer;
+            this._renderMarkdown(current);
+        }
 
         if (stick)
             this._scrollToBottom();
+    }
+
+    // --- Markdown rendering --------------------------------------------------
+
+    _makeMarkdownLabel(markup, {xalign = 0} = {}) {
+        const label = new Gtk.Label({
+            wrap: true,
+            selectable: true,
+            xalign,
+            hexpand: true,
+        });
+        label.set_markup(markup);
+        label.connect('activate-link', (_label, uri) => {
+            try {
+                Gio.AppInfo.launch_default_for_uri(uri, null);
+            } catch (e) {
+                logError(e);
+            }
+            return true;
+        });
+        return label;
+    }
+
+    _childAt(box, index) {
+        let child = box.get_first_child();
+        for (let i = 0; i < index && child; i++)
+            child = child.get_next_sibling();
+        return child;
+    }
+
+    _createMarkdownBlock(block) {
+        switch (block.type) {
+        case 'heading': {
+            const size = block.level === 1 ? 'x-large'
+                : block.level === 2 ? 'large' : 'medium';
+            return this._makeMarkdownLabel(
+                `<span weight="bold" size="${size}">` +
+                `${inlineToPango(block.text)}</span>`);
+        }
+        case 'paragraph':
+            return this._makeMarkdownLabel(
+                inlineToPango(block.text.replace(/\n/g, ' ')));
+        case 'code': {
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.VERTICAL,
+                spacing: 4,
+            });
+            box.add_css_class('ai-chat-code');
+
+            if (block.lang) {
+                const lang = new Gtk.Label({
+                    label: block.lang,
+                    xalign: 0,
+                    hexpand: true,
+                });
+                lang.add_css_class('ai-chat-code-lang');
+                lang.add_css_class('dim-label');
+                box.append(lang);
+            }
+
+            const code = new Gtk.Label({
+                label: block.text,
+                wrap: true,
+                selectable: true,
+                xalign: 0,
+                hexpand: true,
+            });
+            code.add_css_class('ai-chat-code-text');
+            box.append(code);
+            return box;
+        }
+        case 'list': {
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.VERTICAL,
+                spacing: 4,
+            });
+            block.items.forEach((item, index) => {
+                const row = new Gtk.Box({
+                    orientation: Gtk.Orientation.HORIZONTAL,
+                    spacing: 8,
+                });
+                const marker = new Gtk.Label({
+                    label: block.ordered ? `${block.start + index}.` : '•',
+                    xalign: 0,
+                    valign: Gtk.Align.START,
+                });
+                marker.add_css_class('ai-chat-list-marker');
+                row.append(marker);
+                row.append(this._makeMarkdownLabel(
+                    inlineToPango(item.text.replace(/\n/g, ' '))));
+                box.append(row);
+            });
+            return box;
+        }
+        case 'quote': {
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.VERTICAL,
+                spacing: 4,
+            });
+            box.add_css_class('ai-chat-quote');
+            for (const line of block.text.split('\n')) {
+                if (line.trim()) {
+                    box.append(this._makeMarkdownLabel(
+                        `<i>${inlineToPango(line)}</i>`));
+                }
+            }
+            return box;
+        }
+        case 'table':
+            return this._createMarkdownTable(block);
+        case 'rule':
+            return new Gtk.Separator({orientation: Gtk.Orientation.HORIZONTAL});
+        default:
+            return new Gtk.Label({label: ''});
+        }
+    }
+
+    _createMarkdownTable(block) {
+        const grid = new Gtk.Grid({
+            column_spacing: 18,
+            row_spacing: 6,
+            hexpand: true,
+        });
+        grid.add_css_class('ai-chat-table');
+
+        const columns = Math.max(
+            1,
+            block.header.length,
+            ...block.rows.map(row => row.length));
+
+        const addCell = (value, column, row, header) => {
+            const align = block.aligns[column] ?? 'left';
+            const label = this._makeMarkdownLabel(
+                inlineToPango(value ?? ''), {
+                    xalign: align === 'right' ? 1
+                        : align === 'center' ? 0.5 : 0,
+                });
+            if (header)
+                label.add_css_class('ai-chat-table-header');
+            grid.attach(label, column, row, 1, 1);
+        };
+
+        for (let column = 0; column < columns; column++)
+            addCell(block.header[column], column, 0, true);
+        block.rows.forEach((row, index) => {
+            for (let column = 0; column < columns; column++)
+                addCell(row[column], column, index + 1, false);
+        });
+
+        return grid;
+    }
+
+    _renderMarkdown(current) {
+        const blocks = parseMarkdown(current.answer);
+        const signatures = blocks.map(block => JSON.stringify(block));
+
+        for (let i = current.blocks.length - 1; i >= blocks.length; i--) {
+            current.contentBox.remove(current.blocks[i].widget);
+            current.blocks.pop();
+        }
+
+        for (let i = 0; i < blocks.length; i++) {
+            if (current.blocks[i] &&
+                current.blocks[i].signature === signatures[i])
+                continue;
+
+            const widget = this._createMarkdownBlock(blocks[i]);
+            const existing = current.blocks[i];
+
+            if (!existing) {
+                current.contentBox.append(widget);
+                current.blocks.push({signature: signatures[i], widget});
+                continue;
+            }
+
+            current.contentBox.remove(existing.widget);
+            const before = this._childAt(current.contentBox, i);
+            if (before)
+                current.contentBox.insert_child_after(
+                    widget, before.get_prev_sibling());
+            else
+                current.contentBox.append(widget);
+            current.blocks[i] = {signature: signatures[i], widget};
+        }
     }
 
     _isAtBottom() {

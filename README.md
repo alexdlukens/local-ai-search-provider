@@ -4,6 +4,7 @@ GNOME Shell 50 search provider that sends your overview query to a local
 OpenAI-compatible model and streams the answer directly into the search results.
 
 - Streaming answers with a configurable typing debounce
+- Markdown answers rendered in the overview row and the chat window
 - Follow-up questions in a dedicated chat window with saved history
 - Model loading status with progress when the server reports it
 - Unsloth Studio / llama.cpp / Ollama / LM Studio compatible
@@ -49,7 +50,7 @@ button) and adjust:
 | Endpoint URL | `http://127.0.0.1:8888/v1` | Base URL. A bare `host:port` gets `http://` and `/v1` added. A green check or red X next to it shows whether the API is responding. |
 | API key | empty | Optional `Authorization: Bearer` token. |
 | Model | Auto | Dropdown populated from `/v1/models`; pick a downloaded model or leave it on Auto. Use the refresh button after downloading models. |
-| System prompt | concise plain-text answer | Prepended to every query. |
+| System prompt | Markdown answer request | Prepended to every query. |
 | Debounce | 400 ms | Extra wait after typing stops, on top of the shell's own 150 ms. |
 | Enable thinking | on | Lets reasoning-capable models think. Turning it off sends `enable_thinking: false` / `reasoning_effort: none`; servers and models without thinking support ignore it. |
 | Show reasoning | off | Displays `reasoning_content` in the result row and in the chat window. Requires thinking to be enabled. |
@@ -142,7 +143,10 @@ engines.
 
 ## Notes and limitations
 
-- The answer row and chat window are plain text; Markdown is shown as-is.
+- Markdown is rendered in both the answer row and the chat window: headings,
+  emphasis, inline code, fenced code blocks, lists, blockquotes, rules and pipe
+  tables. Raw HTML and unsafe link schemes are shown as text. Links open in the
+  chat window; the overview row shows them underlined without click handling.
 - A new overview query starts a new conversation. Click a result to continue
   that conversation with follow-ups.
 - Chat history is stored locally in plain JSON. Follow-ups include earlier
