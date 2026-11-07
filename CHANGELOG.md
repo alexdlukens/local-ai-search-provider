@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Opening the chat window before the answer starts streaming (for example by
+  pressing `Enter` while the query is still inside the typing debounce) now
+  sends the pending question from the chat window instead of leaving it
+  unanswered.
+
 ## [0.1.0] - 2026-11-07
 
 Initial public release. AI-generated; see the disclaimer in the README.

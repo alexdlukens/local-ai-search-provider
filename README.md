@@ -108,7 +108,7 @@ The full walkthrough, including server setup for each backend, is in
 | Surface | What it does |
 | --- | --- |
 | **Overview answer** | Streams the answer into a full-width result row. **Loading model…** appears while a cold model starts. |
-| **Answer row → click/Enter** | Opens the answer in the chat window. Follow-ups send the earlier turns to the model. |
+| **Answer row → click/Enter** | Opens the answer in the chat window. Pressing Enter before the answer starts streaming is fine: the question is sent from the chat window instead. Follow-ups send the earlier turns to the model. |
 | **AI chat history** row | Opens the saved-conversation list. |
 | **AI Chats** app | Opens the chat window directly from the application grid. |
 | **Settings → Chats** | Opens the same conversation list. |

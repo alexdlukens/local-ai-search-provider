@@ -107,17 +107,20 @@ function loadSettings() {
 function parseArgs(args) {
     let conversationId = null;
     let history = false;
+    let resume = false;
 
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--history') {
             history = true;
+        } else if (args[i] === '--continue') {
+            resume = true;
         } else if (args[i] === '--conversation') {
             conversationId = args[i + 1] ?? null;
             i += 1;
         }
     }
 
-    return {conversationId, history};
+    return {conversationId, history, resume};
 }
 
 function isCancellationError(error) {
@@ -189,13 +192,23 @@ class ChatWindow {
         return this._window;
     }
 
-    open({conversationId, history}) {
+    open({conversationId, history, resume = false}) {
         if (history)
             this.showHistory();
-        else if (conversationId)
+        else if (conversationId) {
             this.showConversation(conversationId);
-        else if (!this._conversation)
+            if (resume)
+                this._resumeIfNeeded();
+        } else if (!this._conversation)
             this.newChat();
+    }
+
+    _resumeIfNeeded() {
+        if (this._busy || !this._conversation)
+            return;
+        if (this._conversation.messages.at(-1)?.role !== 'user')
+            return;
+        this._respond().catch(logError);
     }
 
     // --- UI construction -----------------------------------------------------
@@ -1009,6 +1022,20 @@ class ChatWindow {
         this._store.upsert(this._conversation);
 
         this._addUserMessage(text);
+        await this._respond();
+    }
+
+    // Answer the pending user message of the current conversation. The message
+    // is already in the transcript, either just typed or restored from a saved
+    // chat whose reply never started (for example when the overview result was
+    // activated before the search provider's debounce fired).
+    async _respond() {
+        const conversation = this._conversation;
+        if (this._busy || !conversation)
+            return;
+        if (conversation.messages.at(-1)?.role !== 'user')
+            return;
+
         this._beginAssistantMessage();
         this._setBusy(true);
         this._setStatus('Thinking…');

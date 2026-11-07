@@ -44,9 +44,13 @@ Why two processes:
   main loop and event handling. Running GTK widgets inside `gnome-shell` is
   fragile, so the chat window is a normal GJS application process.
 - A crash or GTK bug in the chat window does not take down the compositor.
-- `lib/launch.js` starts `gjs -m chatWindow.js` and forwards a conversation ID
-  or the history flag. `Adw.Application` makes repeated launches activate the
-  existing window instead of creating duplicates.
+- `lib/launch.js` starts `gjs -m chatWindow.js` and forwards a conversation ID,
+  the history flag, or a `--continue` flag. `Adw.Application` makes repeated
+  launches activate the existing window instead of creating duplicates.
+  `--continue` is sent when the saved conversation still ends on the user's
+  question (the overview result was activated before the debounce fired or
+  before any token arrived); the window then answers that turn as soon as it
+  opens.
 
 ## Request lifecycle
 

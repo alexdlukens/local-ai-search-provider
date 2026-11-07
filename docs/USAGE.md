@@ -131,7 +131,10 @@ The complete settings reference is in the
 3. The answer streams into the result row. If the server is cold-starting a
    model, the row shows **Loading model…** with a percentage when the server
    exposes `/v1/load-progress`.
-4. Press `Enter` on the answer, or click it, to open the chat window.
+4. Press `Enter` on the answer, or click it, to open the chat window. You do
+   not have to wait for the answer to start: if the question is still waiting
+   on the debounce or the model, the chat window asks it and streams the reply
+   there.
 
 While a request is in flight, typing a new query cancels the old one. The
 overview row only shows the final answer; reasoning and tool cards appear in

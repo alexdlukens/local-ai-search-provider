@@ -294,8 +294,13 @@ export class AiSearchProvider {
             return;
         }
 
+        // If the debounce had not fired (or the answer was still streaming
+        // with nothing received yet), the saved conversation ends on the
+        // user's question. Ask the chat window to answer it there.
+        const resume = this._conversation.messages.at(-1)?.role === 'user';
+
         try {
-            launchChatWindow(EXTENSION_DIR, {conversationId: id});
+            launchChatWindow(EXTENSION_DIR, {conversationId: id, resume});
         } catch (e) {
             Main.notify('AI Search', `Could not open the chat window: ${e.message}`);
         }
