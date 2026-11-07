@@ -104,8 +104,6 @@ Open the preferences window:
 gnome-extensions prefs ai-search@alexdlukens.github.io
 ```
 
-You can also use **Extension Manager → AI Search → Settings** (gear button).
-
 1. Set **Endpoint URL** to your server, for example
    `http://127.0.0.1:8888/v1`. A bare `host:port` gets `http://` and `/v1`
    added automatically; a full `.../chat/completions` URL is also accepted.

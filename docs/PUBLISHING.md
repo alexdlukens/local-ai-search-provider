@@ -16,9 +16,8 @@ Use this before flipping the repository to public and before tagging a release.
 
 - [ ] The README opens with the AI-generated disclaimer.
 - [ ] `metadata.json` has the public UUID, URL, and version name.
-- [ ] Screenshots exist under `docs/screenshots/` and are referenced from the
-      README. GNOME Extension Manager and extensions.gnome.org both look much
-      better with at least one overview and one chat-window image.
+- [ ] Screenshots are ready for the listing: at least one overview and one
+      chat-window image. extensions.gnome.org looks much better with both.
 - [ ] Chats and settings used during testing are not committed.
 
 ## Make the repository public

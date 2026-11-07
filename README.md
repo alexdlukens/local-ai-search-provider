@@ -42,7 +42,7 @@ are opt-in and contacted only when enabled.
 - Optional [Model Context Protocol](https://modelcontextprotocol.io/) (MCP)
   servers for additional tools.
 - Optional thinking, plus a display-only reasoning switch.
-- Configured through GNOME Extension Manager or the `prefs.js` dialog.
+- Configured with `gnome-extensions prefs ai-search@alexdlukens.github.io`.
 
 ## Requirements
 
@@ -69,16 +69,11 @@ adds an **AI Chats** entry to the application grid. `make uninstall` removes
 both.
 
 A newly installed extension is normally picked up only after logging out
-and back in. Then open **Extension Manager → AI Search → Settings**
-(or run `gnome-extensions prefs ai-search@alexdlukens.github.io`) and point it
-at your server.
-
-If you previously installed the development UUID `ai-search@local`, remove it
-first so two providers do not run at once:
+and back in. Then open the settings from a terminal and point it at your
+server:
 
 ```sh
-gnome-extensions disable ai-search@local
-rm -rf ~/.local/share/gnome-shell/extensions/ai-search@local
+gnome-extensions prefs ai-search@alexdlukens.github.io
 ```
 
 ### Minimal configuration
@@ -126,7 +121,7 @@ Conversations are stored as plain JSON in
 
 ## Configuration
 
-Open **Extension Manager → AI Search → Settings** (gear button), or run:
+Open the settings from a terminal:
 
 ```sh
 gnome-extensions prefs ai-search@alexdlukens.github.io
