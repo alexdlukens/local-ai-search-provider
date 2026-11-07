@@ -4,6 +4,7 @@ import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
+import Pango from 'gi://Pango';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -38,14 +39,141 @@ function installStatusCss() {
         display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
 }
 
+/* Adw.ComboRow sizes its popup to the row, so every model id is ellipsized to
+ * the same short stub. This row keeps a plain popover instead, letting the list
+ * take the width of its widest entry and wrap the longest ids. */
+const MODEL_LABEL_MAX_CHARS = 56;
+
+class ModelSelector {
+    constructor({title, subtitle}) {
+        this._labels = ['Auto (first loaded model)'];
+        this._checks = [];
+        this._selected = 0;
+        this._updating = false;
+        this.onSelected = null;
+
+        this.row = new Adw.ActionRow({title, subtitle});
+
+        this._valueLabel = new Gtk.Label({
+            xalign: 0,
+            ellipsize: Pango.EllipsizeMode.END,
+            max_width_chars: MODEL_LABEL_MAX_CHARS,
+        });
+        const valueBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 6,
+        });
+        valueBox.append(this._valueLabel);
+        valueBox.append(new Gtk.Image({icon_name: 'pan-down-symbolic'}));
+
+        this._button = new Gtk.MenuButton({
+            child: valueBox,
+            valign: Gtk.Align.CENTER,
+        });
+        this._button.add_css_class('flat');
+
+        this._list = new Gtk.ListBox({
+            selection_mode: Gtk.SelectionMode.SINGLE,
+            activate_on_single_click: true,
+        });
+
+        this._scroller = new Gtk.ScrolledWindow({
+            propagate_natural_width: true,
+            propagate_natural_height: true,
+            max_content_height: 480,
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+        });
+        this._scroller.set_child(this._list);
+
+        this._popover = new Gtk.Popover({child: this._scroller});
+        this._button.popover = this._popover;
+
+        this.row.add_suffix(this._button);
+        this.row.activatable_widget = this._button;
+
+        this._list.connect('row-selected', (list, row) => {
+            if (!row || this._updating)
+                return;
+            this._selected = row.get_index();
+            this._updateLabel();
+            this._updateChecks();
+            this.onSelected?.(this._selected);
+        });
+    }
+
+    setItems(labels) {
+        this._labels = labels;
+
+        this._updating = true;
+        this._list.remove_all();
+        this._checks = [];
+        for (const text of labels) {
+            const label = new Gtk.Label({
+                label: text,
+                xalign: 0,
+                hexpand: true,
+                wrap: true,
+                wrap_mode: Pango.WrapMode.WORD_CHAR,
+                max_width_chars: MODEL_LABEL_MAX_CHARS,
+            });
+            const check = new Gtk.Image({
+                icon_name: 'object-select-symbolic',
+                visible: false,
+            });
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.HORIZONTAL,
+                spacing: 8,
+                margin_start: 12,
+                margin_end: 12,
+                margin_top: 8,
+                margin_bottom: 8,
+            });
+            box.append(label);
+            box.append(check);
+
+            const row = new Gtk.ListBoxRow({child: box, tooltip_text: text});
+            this._list.append(row);
+            this._checks.push(check);
+        }
+        this._updating = false;
+
+        this.setSelected(Math.min(this._selected, labels.length - 1));
+    }
+
+    setSelected(index) {
+        if (index < 0 || index >= this._labels.length)
+            index = 0;
+
+        this._updating = true;
+        this._selected = index;
+        this._list.select_row(this._list.get_row_at_index(index));
+        this._updating = false;
+
+        this._updateLabel();
+        this._updateChecks();
+    }
+
+    _updateLabel() {
+        const text = this._labels[this._selected] ?? '';
+        this._valueLabel.label = text;
+        this._valueLabel.tooltip_text = text;
+    }
+
+    _updateChecks() {
+        this._checks.forEach((check, index) => {
+            check.visible = index === this._selected;
+        });
+    }
+}
+
 class ServerPanel {
-    constructor(settings, {endpointRow, apiKeyRow, modelRow, refreshButton}) {
+    constructor(settings, {endpointRow, apiKeyRow, modelSelector, refreshButton}) {
         installStatusCss();
 
         this._settings = settings;
         this._endpointRow = endpointRow;
         this._apiKeyRow = apiKeyRow;
-        this._modelRow = modelRow;
+        this._modelSelector = modelSelector;
         this._refreshButton = refreshButton;
         this._client = new OpenAIClient();
 
@@ -55,7 +183,6 @@ class ServerPanel {
         this._debounceId = 0;
         this._timeoutId = 0;
         this._cancellable = null;
-        this._updatingCombo = false;
         this._destroyed = false;
 
         this._spinner = new Gtk.Spinner({
@@ -91,9 +218,9 @@ class ServerPanel {
         this._refreshId = refreshButton.connect('clicked', () => {
             this._checkNow();
         });
-        this._selectionId = modelRow.connect('notify::selected', () => {
-            this._onModelSelected();
-        });
+        modelSelector.onSelected = index => {
+            this._onModelSelected(index);
+        };
 
         this._populateModels([]);
         this._scheduleCheck(80);
@@ -222,17 +349,15 @@ class ServerPanel {
         }
 
         this._modelIds = ids;
-        this._updatingCombo = true;
-        this._modelRow.model = Gtk.StringList.new(labels);
-        this._modelRow.selected = Math.max(0, ids.indexOf(current));
-        this._updatingCombo = false;
+        this._modelSelector.setItems(labels);
+        this._modelSelector.setSelected(Math.max(0, ids.indexOf(current)));
     }
 
-    _onModelSelected() {
-        if (this._updatingCombo || this._destroyed)
+    _onModelSelected(index) {
+        if (this._destroyed)
             return;
 
-        const model = this._modelIds[this._modelRow.selected];
+        const model = this._modelIds[index];
         if (model === undefined)
             return;
 
@@ -285,10 +410,10 @@ class ServerPanel {
             this._endpointRow.disconnect(this._endpointChangedId);
             this._apiKeyRow.disconnect(this._apiKeyChangedId);
             this._refreshButton.disconnect(this._refreshId);
-            this._modelRow.disconnect(this._selectionId);
         } catch {
             // Rows may already be disposed
         }
+        this._modelSelector.onSelected = null;
 
         this._client.destroy();
         this._client = null;
@@ -357,12 +482,11 @@ export default class AiSearchPreferences extends ExtensionPreferences {
         settings.bind('api-key', apiKeyRow, 'text', Gio.SettingsBindFlags.DEFAULT);
         serverGroup.add(apiKeyRow);
 
-        const modelRow = new Adw.ComboRow({
+        const modelSelector = new ModelSelector({
             title: 'Model',
             subtitle: 'Populated from /v1/models. Refresh after downloading models.',
         });
-        modelRow.model = Gtk.StringList.new(['Auto (first loaded model)']);
-        serverGroup.add(modelRow);
+        serverGroup.add(modelSelector.row);
 
         const refreshButton = new Gtk.Button({
             icon_name: 'view-refresh-symbolic',
@@ -370,12 +494,12 @@ export default class AiSearchPreferences extends ExtensionPreferences {
             valign: Gtk.Align.CENTER,
         });
         refreshButton.add_css_class('flat');
-        modelRow.add_suffix(refreshButton);
+        modelSelector.row.add_suffix(refreshButton);
 
         const serverPanel = new ServerPanel(settings, {
             endpointRow,
             apiKeyRow,
-            modelRow,
+            modelSelector,
             refreshButton,
         });
         this._serverPanel = serverPanel;
