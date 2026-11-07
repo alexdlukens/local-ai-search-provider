@@ -1,7 +1,10 @@
 UUID = ai-search@local
 EXTENSION_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
+APPLICATIONS_DIR = $(HOME)/.local/share/applications
+DESKTOP_FILE = org.gnome.Shell.Extensions.AiSearch.Chat.desktop
+GJS ?= $(shell command -v gjs || echo gjs)
 
-.PHONY: all schemas install enable pack clean
+.PHONY: all schemas install install-desktop enable pack clean
 
 all: schemas
 
@@ -12,6 +15,13 @@ install: schemas
 	mkdir -p $(EXTENSION_DIR)
 	cp -r metadata.json extension.js prefs.js chatWindow.js searchProvider.js lib schemas stylesheet.css README.md $(EXTENSION_DIR)/
 	glib-compile-schemas $(EXTENSION_DIR)/schemas
+	$(MAKE) install-desktop
+
+install-desktop:
+	mkdir -p $(APPLICATIONS_DIR)
+	sed -e 's|@GJS@|$(GJS)|g' -e 's|@EXTENSION_DIR@|$(EXTENSION_DIR)|g' \
+		data/$(DESKTOP_FILE).in > $(APPLICATIONS_DIR)/$(DESKTOP_FILE)
+	-update-desktop-database $(APPLICATIONS_DIR) 2>/dev/null
 
 enable: install
 	gnome-extensions enable $(UUID)
@@ -32,3 +42,5 @@ clean:
 
 uninstall:
 	rm -rf $(EXTENSION_DIR)
+	rm -f $(APPLICATIONS_DIR)/$(DESKTOP_FILE)
+	-update-desktop-database $(APPLICATIONS_DIR) 2>/dev/null

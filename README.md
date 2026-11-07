@@ -41,6 +41,10 @@ make install
 gnome-extensions enable ai-search@local
 ```
 
+`make install` also adds an **AI Chats** entry to the app grid. It opens the
+chat window directly. `make uninstall` removes both the extension and the
+launcher.
+
 On Wayland, a newly installed extension may only be picked up after logging out
 and back in. Then open **Extension Manager -> AI Search -> Settings** (gear
 button) and adjust:
@@ -71,9 +75,9 @@ There you can read the full transcript, ask follow-up questions, and copy any
 answer with its copy button. Follow-ups send the earlier turns to the model.
 
 The **AI chat history** row below the answer opens the list of saved
-conversations. The same list is available from **Settings -> AI Search ->
-Chats**, and from the chat window's history button. Conversations are stored as
-plain JSON in `~/.local/share/ai-search/chats.json`.
+conversations. The same list is available from the **AI Chats** app in the app
+grid, **Settings -> AI Search -> Chats**, and the chat window's history button.
+Conversations are stored as plain JSON in `~/.local/share/ai-search/chats.json`.
 
 ## Tools
 
