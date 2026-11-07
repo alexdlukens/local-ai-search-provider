@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.ai-search"
+          path="/org/gnome/shell/extensions/ai-search/">
+
+    <key name="endpoint" type="s">
+      <default>'http://127.0.0.1:8888/v1'</default>
+      <summary>OpenAI-compatible base URL</summary>
+      <description>Base URL of the model server, for example http://127.0.0.1:8888/v1.</description>
+    </key>
+
+    <key name="api-key" type="s">
+      <default>''</default>
+      <summary>API key</summary>
+      <description>Optional bearer token sent with each request.</description>
+    </key>
+
+    <key name="model" type="s">
+      <default>''</default>
+      <summary>Model name</summary>
+      <description>Model name sent to the server. Leave empty to use the first model advertised by /v1/models.</description>
+    </key>
+
+    <key name="system-prompt" type="s">
+      <default>'You are an AI assistant embedded in the GNOME Shell overview search. Answer in plain text, concisely, because the answer is displayed in a narrow search result. Avoid Markdown tables and long code blocks. Use the available tools when they help.'</default>
+      <summary>System prompt</summary>
+      <description>Instruction prepended to every query.</description>
+    </key>
+
+    <key name="debounce-ms" type="i">
+      <default>400</default>
+      <range min="0" max="3000"/>
+      <summary>Typing debounce</summary>
+      <description>Milliseconds to wait after the last keystroke before sending a request.</description>
+    </key>
+
+    <key name="show-reasoning" type="b">
+      <default>false</default>
+      <summary>Show reasoning</summary>
+      <description>Stream the model's reasoning/thinking content above the answer.</description>
+    </key>
+
+    <key name="enable-tools" type="b">
+      <default>true</default>
+      <summary>Enable tools</summary>
+      <description>Expose the local tool set to the model through function calling.</description>
+    </key>
+
+    <key name="max-tool-rounds" type="i">
+      <default>3</default>
+      <range min="0" max="8"/>
+      <summary>Maximum tool rounds</summary>
+      <description>Maximum number of tool-call and answer rounds per query.</description>
+    </key>
+
+  </schema>
+</schemalist>

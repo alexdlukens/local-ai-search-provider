@@ -1,0 +1,34 @@
+.ai-search-result {
+    padding: 8px 12px;
+}
+
+.ai-search-content {
+    spacing: 4px;
+}
+
+.ai-search-header {
+    spacing: 8px;
+}
+
+.ai-search-title {
+    font-weight: bold;
+}
+
+.ai-search-status {
+    font-size: 0.9em;
+}
+
+.ai-search-answer {
+    margin-top: 2px;
+}
+
+.ai-search-reasoning {
+    font-style: italic;
+    font-size: 0.92em;
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+.ai-search-error {
+    color: #ff7b7b;
+}

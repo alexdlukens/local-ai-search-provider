@@ -1,0 +1,9 @@
+{
+  "uuid": "ai-search@local",
+  "name": "AI Search",
+  "description": "Ask a local OpenAI-compatible model (Unsloth, llama.cpp, Ollama, LM Studio) directly from the GNOME Shell overview. Answers stream into the search results.",
+  "shell-version": [
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.ai-search"
+}
