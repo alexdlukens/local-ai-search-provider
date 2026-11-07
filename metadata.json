@@ -1,7 +1,7 @@
 {
   "uuid": "ai-search@local",
   "name": "AI Search",
-  "description": "Ask a local OpenAI-compatible model (Unsloth, llama.cpp, Ollama, LM Studio) directly from the GNOME Shell overview. Answers stream into the search results; open any answer for follow-up chats with saved history.",
+  "description": "Ask a local OpenAI-compatible model (Unsloth, llama.cpp, Ollama, LM Studio) directly from the GNOME Shell overview. Answers stream into the search results; open any answer for follow-up chats with saved history. Includes inline weather, country, Wikipedia and currency tools, plus optional MCP servers.",
   "shell-version": [
     "50"
   ],

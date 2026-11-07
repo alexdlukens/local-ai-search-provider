@@ -52,6 +52,24 @@
       <description>Expose the local tool set to the model through function calling.</description>
     </key>
 
+    <key name="enable-web-tools" type="b">
+      <default>true</default>
+      <summary>Enable web data tools</summary>
+      <description>Weather, country and population lookups, Wikipedia search, and currency conversion. Results are returned inline in the answer and chat.</description>
+    </key>
+
+    <key name="enable-mcp" type="b">
+      <default>false</default>
+      <summary>Enable MCP servers</summary>
+      <description>Discover tools from the configured Model Context Protocol servers and expose them to the model.</description>
+    </key>
+
+    <key name="mcp-servers" type="s">
+      <default>'[]'</default>
+      <summary>MCP server configuration</summary>
+      <description>JSON array of MCP servers. Each entry needs name, url, optional headers object, and enabled.</description>
+    </key>
+
     <key name="max-tool-rounds" type="i">
       <default>3</default>
       <range min="0" max="8"/>

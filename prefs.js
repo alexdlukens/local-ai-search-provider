@@ -8,6 +8,7 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 
 import {OpenAIClient, normalizeEndpoint} from './lib/openaiClient.js';
 import {launchChatWindow} from './lib/launch.js';
+import {parseMcpServers, listMcpTools} from './lib/mcp.js';
 
 const CHECK_DEBOUNCE_MS = 600;
 const CHECK_TIMEOUT_SECONDS = 8;
@@ -443,29 +444,200 @@ export default class AiSearchPreferences extends ExtensionPreferences {
         // --- Tools ----------------------------------------------------------
         const toolsGroup = new Adw.PreferencesGroup({
             title: 'Tools',
-            description: 'Tools run locally in the extension or chat window: ' +
-                'get_datetime, get_system_info, open_application, open_url.',
+            description: 'Read-only tools return data inline: get_datetime, ' +
+                'get_system_info, get_weather, get_country_info, ' +
+                'search_wikipedia, convert_currency, and open_application.',
         });
         page.add(toolsGroup);
 
         const toolsRow = new Adw.SwitchRow({
             title: 'Enable tool calling',
-            subtitle: 'Let the model call the local tools above via function calling.',
+            subtitle: 'Let the model call the tools above via function calling.',
         });
         settings.bind('enable-tools', toolsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         toolsGroup.add(toolsRow);
+
+        const webToolsRow = new Adw.SwitchRow({
+            title: 'Enable web data tools',
+            subtitle: 'Weather, country and population lookups, Wikipedia search ' +
+                'and currency conversion. Results come back inline; nothing opens a browser.',
+        });
+        settings.bind('enable-web-tools', webToolsRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        toolsGroup.add(webToolsRow);
 
         const rounds = addSpin(toolsGroup, settings, 'max-tool-rounds',
             'Maximum tool rounds', 'How many tool/answer loops to allow per query',
             0, 8, 1);
         cleanup.push(() => rounds.row.disconnect(rounds.changedId));
 
+        // --- MCP ------------------------------------------------------------
+        const mcpGroup = new Adw.PreferencesGroup({
+            title: 'MCP servers',
+            description: 'Expose tools from Model Context Protocol servers. ' +
+                'Configuration is a JSON array:\n' +
+                '[{"name": "DeepWiki", "url": "https://mcp.deepwiki.com/mcp", ' +
+                '"headers": {}, "enabled": true}]\n' +
+                'Headers can carry an Authorization token. Only http(s) servers are allowed.',
+        });
+        page.add(mcpGroup);
+
+        const mcpRow = new Adw.SwitchRow({
+            title: 'Enable MCP tools',
+            subtitle: 'Discover the tools below and let the model call them.',
+        });
+        settings.bind('enable-mcp', mcpRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        mcpGroup.add(mcpRow);
+
+        const mcpBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 8,
+            margin_top: 6,
+            margin_bottom: 6,
+            margin_start: 6,
+            margin_end: 6,
+        });
+
+        const editorScroll = new Gtk.ScrolledWindow({
+            min_content_height: 150,
+            hexpand: true,
+        });
+        editorScroll.set_policy(
+            Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
+
+        const editor = new Gtk.TextView({
+            monospace: true,
+            wrap_mode: Gtk.WrapMode.NONE,
+            top_margin: 8,
+            bottom_margin: 8,
+            left_margin: 8,
+            right_margin: 8,
+        });
+        editor.get_buffer().set_text(settings.get_string('mcp-servers'), -1);
+        editorScroll.set_child(editor);
+
+        const editorFrame = new Gtk.Frame();
+        editorFrame.set_child(editorScroll);
+        mcpBox.append(editorFrame);
+
+        const mcpActions = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+        });
+        const saveMcpButton = new Gtk.Button({label: 'Save'});
+        saveMcpButton.add_css_class('suggested-action');
+        const testMcpButton = new Gtk.Button({label: 'Save & test'});
+        const mcpStatus = new Gtk.Label({
+            xalign: 0,
+            wrap: true,
+            hexpand: true,
+            visible: false,
+        });
+        mcpStatus.set_opacity(0.8);
+        mcpActions.append(saveMcpButton);
+        mcpActions.append(testMcpButton);
+        mcpActions.append(mcpStatus);
+        mcpBox.append(mcpActions);
+        mcpGroup.add(mcpBox);
+
+        let mcpDisposed = false;
+        let mcpTestCancellable = null;
+
+        const readEditor = () => {
+            const buffer = editor.get_buffer();
+            return buffer.get_text(
+                buffer.get_start_iter(), buffer.get_end_iter(), false);
+        };
+
+        const setMcpStatus = (text, isError = false) => {
+            if (mcpDisposed)
+                return;
+            mcpStatus.set_text(text);
+            mcpStatus.set_visible(Boolean(text));
+            if (isError)
+                mcpStatus.add_css_class('error');
+            else
+                mcpStatus.remove_css_class('error');
+        };
+
+        const saveMcpConfig = () => {
+            try {
+                const servers = parseMcpServers(readEditor(), {strict: true});
+                const pretty = JSON.stringify(servers, null, 2);
+                settings.set_string('mcp-servers', pretty);
+                if (readEditor() !== pretty)
+                    editor.get_buffer().set_text(pretty, -1);
+                setMcpStatus(`Saved ${servers.length} server(s).`);
+                return servers;
+            } catch (e) {
+                setMcpStatus(e.message, true);
+                return null;
+            }
+        };
+
+        const saveMcpId = saveMcpButton.connect('clicked', () => {
+            saveMcpConfig();
+        });
+
+        const testMcpId = testMcpButton.connect('clicked', async () => {
+            const servers = saveMcpConfig();
+            if (!servers || mcpDisposed)
+                return;
+
+            const enabled = servers.filter(server => server.enabled);
+            if (enabled.length === 0) {
+                setMcpStatus('No enabled servers to test.', true);
+                return;
+            }
+
+            mcpTestCancellable?.cancel();
+            const cancellable = new Gio.Cancellable();
+            mcpTestCancellable = cancellable;
+            saveMcpButton.set_sensitive(false);
+            testMcpButton.set_sensitive(false);
+            setMcpStatus('Testing…');
+
+            try {
+                const results = await Promise.allSettled(enabled.map(server =>
+                    listMcpTools(server, {cancellable, force: true})));
+                if (mcpDisposed)
+                    return;
+
+                const lines = results.map((result, index) => {
+                    if (result.status === 'fulfilled')
+                        return `${enabled[index].name}: ${result.value.length} tool(s)`;
+                    return `${enabled[index].name}: ${result.reason?.message ?? 'failed'}`;
+                });
+                setMcpStatus(lines.join('\n'),
+                    results.some(result => result.status === 'rejected'));
+            } catch (e) {
+                if (!cancellable.is_cancelled())
+                    setMcpStatus(e.message, true);
+            } finally {
+                if (mcpTestCancellable === cancellable)
+                    mcpTestCancellable = null;
+                if (!mcpDisposed) {
+                    saveMcpButton.set_sensitive(true);
+                    testMcpButton.set_sensitive(true);
+                }
+            }
+        });
+
+        cleanup.push(() => {
+            mcpDisposed = true;
+            mcpTestCancellable?.cancel();
+            mcpTestCancellable = null;
+            saveMcpButton.disconnect(saveMcpId);
+            testMcpButton.disconnect(testMcpId);
+        });
+
         const noteGroup = new Adw.PreferencesGroup({
             title: 'Notes',
-            description: 'The API key is stored in the GNOME settings database ' +
-                '(dconf) as plain text, like most extension settings. ' +
-                'For a local server it is usually not needed.',
+            description: 'The API key and MCP Authorization headers are stored ' +
+                'in the GNOME settings database (dconf) as plain text, like most ' +
+                'extension settings. For a local server an API key is usually not needed.',
         });
         page.add(noteGroup);
 

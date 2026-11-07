@@ -7,7 +7,8 @@ OpenAI-compatible model and streams the answer directly into the search results.
 - Follow-up questions in a dedicated chat window with saved history
 - Model loading status with progress when the server reports it
 - Unsloth Studio / llama.cpp / Ollama / LM Studio compatible
-- Optional function calling with local tools
+- Inline weather, country/population, Wikipedia and currency tools (no browser)
+- Optional MCP servers for extra tools, configured in Settings
 - Optional thinking, plus a display-only reasoning switch
 - Configured through GNOME Extension Manager
 
@@ -52,7 +53,9 @@ button) and adjust:
 | Debounce | 400 ms | Extra wait after typing stops, on top of the shell's own 150 ms. |
 | Enable thinking | on | Lets reasoning-capable models think. Turning it off sends `enable_thinking: false` / `reasoning_effort: none`; servers and models without thinking support ignore it. |
 | Show reasoning | off | Displays `reasoning_content` in the result row and in the chat window. Requires thinking to be enabled. |
-| Enable tools | on | Exposes the local tools below. |
+| Enable tools | on | Lets the model call tools. |
+| Enable web data tools | on | Weather, country/population, Wikipedia and currency tools. Results are returned inline; nothing opens a browser. |
+| Enable MCP tools | off | Discover tools from the servers configured in the MCP section below. |
 | Maximum tool rounds | 3 | Caps tool-call/answer loops per query. |
 
 Changing the endpoint or API key automatically re-checks the server and refreshes the model list.
@@ -73,17 +76,69 @@ plain JSON in `~/.local/share/ai-search/chats.json`.
 
 ## Tools
 
-The model gets standard OpenAI function-calling definitions. Tool calls are
-executed client-side in the extension process:
+The model gets standard OpenAI function-calling definitions. Tool calls run
+client-side; web results come back into the answer and chat instead of opening
+a browser.
+
+Core:
 
 - `get_datetime` - current local date, time and timezone
 - `get_system_info` - OS, hostname, user, GNOME version, session, CPU, memory, uptime
 - `open_application` - open an installed application by name
-- `open_url` - open an http(s) URL in the default browser
 
-They are read-only except for the explicit "open" actions, and nothing can run
-arbitrary commands or touch files. If your model/server does not support tool
-calling, turn **Enable tools** off.
+Web data (no API key):
+
+- `get_weather` - current conditions and a 1-5 day forecast for a city
+- `get_country_info` - latest World Bank population, capital, region, income level and a Wikipedia summary
+- `search_wikipedia` - Wikipedia search results with summaries and links
+- `convert_currency` - reference exchange rates
+
+In the chat window each tool result is shown as an inline expandable card
+above the answer, so you can see the source data. The overview row shows the
+model's final answer.
+
+The `open_url` browser tool was removed. If your model/server does not support
+tool calling, turn **Enable tools** off.
+
+## MCP servers
+
+MCP tools are discovered at request time and exposed with a `mcp__<server>__`
+prefix. Configure them in **Settings -> AI Search -> MCP servers**. The value is
+a JSON array:
+
+```json
+[
+  {
+    "name": "DeepWiki",
+    "url": "https://mcp.deepwiki.com/mcp",
+    "headers": {},
+    "enabled": true
+  }
+]
+```
+
+Public example: DeepWiki at `https://mcp.deepwiki.com/mcp` provides repository
+documentation tools without an account. Private or self-hosted servers can use
+`headers` for an `Authorization` token:
+
+```json
+[
+  {
+    "name": "Internal",
+    "url": "https://mcp.example.com/mcp",
+    "headers": {"Authorization": "Bearer YOUR_TOKEN"},
+    "enabled": true
+  }
+]
+```
+
+Only Streamable HTTP MCP servers are supported. Use **Save & test** in settings
+to initialize the server and list its tools. Turn **Enable MCP tools** on to
+expose those tools to the model.
+
+For general web search, add a hosted search MCP server (for example Exa,
+Tavily or Brave); the built-in tools intentionally avoid scraping search
+engines.
 
 ## Notes and limitations
 
@@ -92,12 +147,15 @@ calling, turn **Enable tools** off.
   that conversation with follow-ups.
 - Chat history is stored locally in plain JSON. Follow-ups include earlier
   turns, so the local server sees the whole conversation.
+- Web tools and MCP servers send queries to their respective services. The
+  built-in web tools use Open-Meteo, World Bank, Wikipedia and Frankfurter.
 - Reasoning is only displayed when the server emits `reasoning_content` (or
   `reasoning`) and **Show reasoning** is on. Turning off **Enable thinking**
   asks the server to skip reasoning generation entirely; servers that do not
   understand the switch may keep thinking.
-- The API key is stored in dconf as plain text, like all extension settings.
-  Keep the server bound to localhost if possible.
+- The API key and any MCP `Authorization` headers are stored in dconf as plain
+  text, like all extension settings. Keep local servers bound to localhost and
+  use scoped tokens.
 - The extension targets GNOME Shell 50's search-provider API
   (`Main.overview.searchController.addProvider`).
 

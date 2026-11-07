@@ -7,8 +7,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {AiResultRow, AiHistoryRow} from './lib/resultView.js';
 import {OpenAIClient, normalizeEndpoint, ApiError} from './lib/openaiClient.js';
-import {TOOL_DEFINITIONS} from './lib/tools.js';
 import {runChat, buildMessages} from './lib/chatEngine.js';
+import {buildToolRegistry} from './lib/toolRegistry.js';
 import {ChatStore, titleFor} from './lib/chatStore.js';
 import {ModelWatch, formatModelState} from './lib/modelWatch.js';
 import {launchChatWindow} from './lib/launch.js';
@@ -431,11 +431,35 @@ export class AiSearchProvider {
             if (serial !== this._serial)
                 return;
 
-            this._startModelWatch(serial, baseUrl, apiKey, model, cancellable);
-
             const enableThinking = this._settings.get_boolean('enable-thinking');
             const toolsEnabled = this._settings.get_boolean('enable-tools');
             const maxRounds = Math.max(0, this._settings.get_int('max-tool-rounds'));
+            let registry = {
+                definitions: [],
+                execute: null,
+                warnings: [],
+            };
+
+            if (toolsEnabled) {
+                if (this._settings.get_boolean('enable-mcp'))
+                    this._setStatus('Loading tools…');
+                registry = await buildToolRegistry(this._settings, {
+                    cancellable,
+                    onStatus: text => {
+                        if (serial === this._serial)
+                            this._setStatus(text);
+                    },
+                });
+                if (serial !== this._serial)
+                    return;
+                if (registry.warnings.length)
+                    log(`AI Search MCP: ${registry.warnings.join('; ')}`);
+                if (this._settings.get_boolean('enable-mcp'))
+                    this._setStatus('Thinking…');
+            }
+
+            this._startModelWatch(serial, baseUrl, apiKey, model, cancellable);
+
             const messages = buildMessages(
                 this._settings.get_string('system-prompt'),
                 this._conversation.messages);
@@ -446,7 +470,8 @@ export class AiSearchProvider {
                 apiKey,
                 model,
                 messages,
-                tools: toolsEnabled ? TOOL_DEFINITIONS : null,
+                tools: registry.definitions.length ? registry.definitions : null,
+                execute: registry.execute ?? undefined,
                 enableThinking,
                 maxToolRounds: maxRounds,
                 cancellable,

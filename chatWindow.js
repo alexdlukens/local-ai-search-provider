@@ -10,7 +10,7 @@ import Pango from 'gi://Pango?version=1.0';
 
 import {OpenAIClient, normalizeEndpoint} from './lib/openaiClient.js';
 import {runChat, buildMessages} from './lib/chatEngine.js';
-import {TOOL_DEFINITIONS} from './lib/tools.js';
+import {buildToolRegistry} from './lib/toolRegistry.js';
 import {ChatStore, titleFor} from './lib/chatStore.js';
 import {ModelWatch, formatModelState} from './lib/modelWatch.js';
 
@@ -51,6 +51,11 @@ function installCss() {
         }
         .ai-chat-status {
             font-size: 0.9em;
+        }
+        .ai-chat-tool {
+            background-color: @card_bg_color;
+            border-radius: 8px;
+            padding: 4px 8px;
         }
         .ai-chat-history-title {
             font-weight: bold;
@@ -109,6 +114,18 @@ function previewOf(conversation) {
     const last = conversation.messages.at(-1)?.content ?? '';
     const compact = last.replace(/\s+/g, ' ').trim();
     return compact.length > 120 ? `${compact.slice(0, 119)}…` : compact;
+}
+
+function toolLabel(name) {
+    const value = String(name ?? 'tool');
+    if (value.startsWith('mcp__')) {
+        const parts = value.split('__').filter(Boolean);
+        const server = (parts[1] ?? 'MCP').replace(/_/g, ' ');
+        const tool = parts.slice(2).join('_').replace(/_/g, ' ');
+        return `${server} · ${tool}`;
+    }
+    const words = value.replace(/_/g, ' ');
+    return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 class ChatWindow {
@@ -566,6 +583,13 @@ class ChatWindow {
         reasoning.set_opacity(0.7);
         box.append(reasoning);
 
+        const toolsBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 6,
+            visible: false,
+        });
+        box.append(toolsBox);
+
         const content = new Gtk.Label({
             label: '',
             wrap: true,
@@ -580,6 +604,7 @@ class ChatWindow {
         this._current = {
             box,
             reasoning,
+            toolsBox,
             content,
             answer: '',
             reasoningText: '',
@@ -587,6 +612,33 @@ class ChatWindow {
             showReasoning: this._settings.get_boolean('show-reasoning'),
             failed: false,
         };
+        this._scrollToBottom();
+    }
+
+    _addToolResultCard(name, text) {
+        if (!this._current)
+            return;
+
+        const toolsBox = this._current.toolsBox;
+        toolsBox.set_visible(true);
+
+        const expander = new Gtk.Expander({
+            label: toolLabel(name),
+            expanded: text.length <= 1500,
+        });
+        expander.add_css_class('ai-chat-tool');
+
+        const body = new Gtk.Label({
+            label: text,
+            wrap: true,
+            selectable: true,
+            xalign: 0,
+            margin_top: 6,
+        });
+        if (text.startsWith('Error:') || text.startsWith('MCP error:'))
+            body.add_css_class('error');
+        expander.set_child(body);
+        toolsBox.append(expander);
         this._scrollToBottom();
     }
 
@@ -755,6 +807,30 @@ class ChatWindow {
             if (cancellable.is_cancelled())
                 return;
 
+            const toolsEnabled = this._settings.get_boolean('enable-tools');
+            let registry = {
+                definitions: [],
+                execute: undefined,
+                warnings: [],
+            };
+
+            if (toolsEnabled) {
+                if (this._settings.get_boolean('enable-mcp'))
+                    this._setStatus('Loading tools…');
+                registry = await buildToolRegistry(this._settings, {
+                    cancellable,
+                    onStatus: text => {
+                        if (this._cancellable === cancellable)
+                            this._setStatus(text);
+                    },
+                });
+                if (cancellable.is_cancelled())
+                    return;
+                if (registry.warnings.length)
+                    log(`AI Search MCP: ${registry.warnings.join('; ')}`);
+                this._setStatus('Thinking…');
+            }
+
             this._startModelWatch(baseUrl, apiKey, model, cancellable);
 
             const messages = buildMessages(
@@ -767,9 +843,8 @@ class ChatWindow {
                 apiKey,
                 model,
                 messages,
-                tools: this._settings.get_boolean('enable-tools')
-                    ? TOOL_DEFINITIONS
-                    : null,
+                tools: registry.definitions.length ? registry.definitions : null,
+                execute: registry.execute ?? undefined,
                 enableThinking: this._settings.get_boolean('enable-thinking'),
                 maxToolRounds: this._settings.get_int('max-tool-rounds'),
                 cancellable,
@@ -791,6 +866,9 @@ class ChatWindow {
                     if (this._current)
                         this._current.reasoningActive = false;
                     this._setStatus(event.text);
+                    break;
+                case 'tool-result':
+                    this._addToolResultCard(event.name, event.text);
                     break;
                 case 'notice':
                     this._appendNotice(event.text);
