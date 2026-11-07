@@ -131,14 +131,19 @@ The complete settings reference is in the
 3. The answer streams into the result row. If the server is cold-starting a
    model, the row shows **Loading model…** with a percentage when the server
    exposes `/v1/load-progress`.
-4. Press `Enter` on the answer, or click it, to open the chat window. You do
+4. Metrics appear under the answer: time to first token, prompt processing and
+   generation speed (tok/s), and token/context usage. They update while the
+   answer streams and show the final values when it ends.
+5. Press `Enter` on the answer, or click it, to open the chat window; the
+   overview search closes at the same time, so the window is visible without
+   pressing `Escape`. The same applies to the **AI chat history** row. You do
    not have to wait for the answer to start: if the question is still waiting
    on the debounce or the model, the chat window asks it and streams the reply
    there.
 
 While a request is in flight, typing a new query cancels the old one. The
-overview row only shows the final answer; reasoning and tool cards appear in
-the chat window.
+overview row only shows the final answer and its metrics; reasoning and tool
+cards appear in the chat window.
 
 ## 5. Use the chat window
 
@@ -156,6 +161,10 @@ from the **AI Chats** app.
 - Code blocks, tables, lists, links, and quotes are rendered natively. Links
   open in your default browser/mail client.
 - Tool results appear as expandable cards above the answer.
+- Metrics appear under each answer: TTFT, prompt processing and generation
+  speed, token usage, and context usage. They update live while the answer
+  streams and are saved with the conversation, so reopening a chat shows the
+  same values.
 
 A new overview query always starts a new conversation. Use the chat window if
 you want to continue an existing one.
@@ -169,11 +178,22 @@ invoke them directly.
 | --- | --- | --- |
 | `get_datetime` | **Enable tools** | Local date, time, timezone. |
 | `get_system_info` | **Enable tools** | OS, hostname, user, GNOME version, session, CPU, memory, uptime. |
-| `open_application` | **Enable tools** | Launches an installed desktop application. The only side-effecting tool. |
 | `get_weather` | **Enable web data tools** | Open-Meteo; current conditions plus 1–5 forecast days. |
 | `get_country_info` | **Enable web data tools** | World Bank population and metadata plus a Wikipedia summary. |
 | `search_wikipedia` | **Enable web data tools** | Search results with summaries and links. |
+| `web_search` | **Enable web data tools** | DuckDuckGo results: title, URL, and snippet. |
+| `fetch_url` | **Enable web data tools** | Readable text of one public http(s) URL. |
 | `convert_currency` | **Enable web data tools** | Frankfurter reference rates. |
+
+All built-in tools are read-only: they read local information or query web
+providers. The former `open_application` tool was removed, so the model cannot
+launch desktop applications and GNOME Shell's own application search is not
+intercepted.
+
+`fetch_url` only accepts `http` and `https`. Loopback, private, link-local,
+multicast, and reserved addresses are refused, including when a DNS name
+resolves to one, and every redirect hop is checked again. The worst the model
+can do with it is read a public page.
 
 The model gets standard OpenAI function definitions. Tool calls run in the
 extension or chat-window process and results are fed back into the model's next
@@ -220,9 +240,10 @@ MCP tools are exposed as `mcp__<server>__<tool>`. Headers can carry an
 ]
 ```
 
-Only `http(s)` URLs are accepted. For general web search, configure a hosted
-search MCP server such as Exa, Tavily, or Brave. The built-in web tools
-deliberately avoid scraping search engines.
+Only `http(s)` URLs are accepted. The built-in `web_search` tool already
+covers general search through DuckDuckGo without a key; configure a hosted
+search MCP server such as Exa, Tavily, or Brave if you need a guaranteed quota
+or better ranking.
 
 ## 8. Where data lives
 
@@ -283,6 +304,22 @@ rm ~/.local/share/ai-search/chats.json
 - Some servers silently drop `tools`; check their logs.
 - If the model emits malformed tool JSON, the extension shows an error or a
   notice. Try a larger model or disable tools.
+
+### Metrics are missing or shown with `~`
+
+- The server did not report `usage` or llama.cpp-style `timings` in the final
+  stream chunk. Servers that support `stream_options.include_usage` give exact
+  counts. Without them, generated token counts and speeds fall back to a
+  ~4-chars-per-token estimate marked with `~`; prompt token counts and prompt
+  tok/s may be absent.
+- Context percentage additionally needs a discoverable context size from
+  llama.cpp `/props` (`default_generation_settings.n_ctx`) or `/models`
+  (`max_model_len`/`context_length`). If neither is available, only absolute
+  token usage is shown.
+- Enabling tools adds rounds. Totals accumulate across them: prompt and
+  generated tokens are summed, speeds are weighted by round token counts, TTFT
+  stays the first token of the turn, and context usage reflects the last
+  round. Multi-round turns show the round count.
 
 ### MCP server test fails
 

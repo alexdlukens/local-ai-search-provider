@@ -156,6 +156,7 @@ export class AiSearchProvider {
         this._status = '';
         this._error = '';
         this._busy = false;
+        this._metrics = null;
         this._conversation = null;
         this._turnFinalized = false;
         this._reasoningActive = false;
@@ -301,6 +302,8 @@ export class AiSearchProvider {
 
         try {
             launchChatWindow(EXTENSION_DIR, {conversationId: id, resume});
+            if (Main.overview?.visible)
+                Main.overview.hide();
         } catch (e) {
             Main.notify('AI Search', `Could not open the chat window: ${e.message}`);
         }
@@ -319,6 +322,8 @@ export class AiSearchProvider {
 
         try {
             launchChatWindow(EXTENSION_DIR, {history: true});
+            if (Main.overview?.visible)
+                Main.overview.hide();
         } catch (e) {
             Main.notify('AI Search', `Could not open the chat window: ${e.message}`);
         }
@@ -395,6 +400,7 @@ export class AiSearchProvider {
         this._answer = '';
         this._reasoning = '';
         this._reasoningActive = false;
+        this._metrics = null;
         this._status = '';
         this._error = '';
         this._busy = false;
@@ -503,6 +509,10 @@ export class AiSearchProvider {
                 case 'notice':
                     this._appendNotice(event.text);
                     break;
+                case 'metrics':
+                    this._metrics = event.metrics;
+                    this._scheduleFlush();
+                    break;
                 }
             }
 
@@ -581,6 +591,7 @@ export class AiSearchProvider {
             this._conversation.messages.push({
                 role: 'assistant',
                 content: this._answer,
+                metrics: this._metrics,
             });
         }
         this._store?.upsert(this._conversation);
@@ -653,6 +664,7 @@ export class AiSearchProvider {
             busy: this._busy,
             error: this._error,
             showReasoning: this._settings.get_boolean('show-reasoning'),
+            metrics: this._metrics,
         });
     }
 }

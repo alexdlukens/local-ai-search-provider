@@ -36,3 +36,9 @@
 .ai-search-error {
     color: #ff7b7b;
 }
+
+.ai-search-metrics {
+    font-size: 0.85em;
+    margin-top: 2px;
+    text-align: left;
+}

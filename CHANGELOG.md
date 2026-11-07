@@ -6,12 +6,47 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Built-in `web_search` and `fetch_url` tools. `web_search` queries
+  DuckDuckGo's HTML endpoint and returns titles, URLs, and snippets;
+  `fetch_url` returns the readable text of one public web page. Both are
+  gated by **Enable web data tools**. `fetch_url` refuses loopback, private,
+  link-local, multicast, and reserved addresses, checks resolved DNS
+  addresses, and re-validates every redirect hop. Neither tool can execute
+  code or write files.
+- An undo button on the **System prompt** row in preferences restores the
+  built-in default prompt. It is insensitive while the default is already in
+  effect, and it drops the stored override instead of writing the default back,
+  so future default changes still reach the user.
+- Live per-turn metrics in the overview answer row and the chat window: time
+  to first token, prompt processing speed, generation speed, and token/context
+  usage. Generated token counts fall back to estimates when the server
+  reports none. Metrics are saved with chat history and reappear when a chat
+  is reopened.
+
 ### Changed
 
+- The default system prompt now points the model at `web_search` and
+  `fetch_url` for current or general information, with Wikipedia as the
+  encyclopedic fallback.
 - Opening the chat window before the answer starts streaming (for example by
   pressing `Enter` while the query is still inside the typing debounce) now
   sends the pending question from the chat window instead of leaving it
   unanswered.
+- The default system prompt now instructs the model to treat its knowledge as
+  stale: for time-sensitive questions (current events, office holders, prices,
+  releases, versions, scores, statistics) it must call a tool — Wikipedia,
+  weather, currency, country data, or `get_datetime` — and answer from the
+  result instead of memory, and to flag the answer as possibly out of date when
+  no tool can confirm it.
+- Opening the chat window from the overview answer or history row now
+  dismisses the overview search, so no `Escape` is needed.
+
+### Removed
+
+- The `open_application` built-in tool. GNOME Shell's application search is no
+  longer intercepted.
 
 ## [0.1.0] - 2026-11-07
 

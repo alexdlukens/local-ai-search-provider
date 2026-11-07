@@ -15,6 +15,7 @@ import {buildToolRegistry} from './lib/toolRegistry.js';
 import {ChatStore, titleFor} from './lib/chatStore.js';
 import {ModelWatch, formatModelState} from './lib/modelWatch.js';
 import {parseMarkdown, escapeMarkup, inlineToPango} from './lib/markdown.js';
+import {formatMetrics} from './lib/metrics.js';
 
 const UUID = 'ai-search@alexdlukens.github.io';
 const SCHEMA_ID = 'org.gnome.shell.extensions.ai-search';
@@ -53,6 +54,9 @@ function installCss() {
         }
         .ai-chat-status {
             font-size: 0.9em;
+        }
+        .ai-chat-metrics {
+            font-size: 0.85em;
         }
         .ai-chat-tool {
             background-color: @card_bg_color;
@@ -476,7 +480,7 @@ class ChatWindow {
             if (message.role === 'user')
                 this._addUserMessage(message.content);
             else
-                this._addStaticAssistantMessage(message.content);
+                this._addStaticAssistantMessage(message.content, message.metrics ?? null);
         }
 
         const firstUser = messages.find(message => message.role === 'user');
@@ -640,12 +644,25 @@ class ChatWindow {
         contentBox.add_css_class('ai-chat-assistant');
         box.append(contentBox);
 
+        const metricsLabel = new Gtk.Label({
+            label: '',
+            xalign: 0,
+            wrap: true,
+            selectable: true,
+            visible: false,
+        });
+        metricsLabel.add_css_class('ai-chat-metrics');
+        metricsLabel.add_css_class('dim-label');
+        box.append(metricsLabel);
+
         this._messagesBox.append(box);
         this._current = {
             box,
             reasoning,
             toolsBox,
             contentBox,
+            metricsLabel,
+            metrics: null,
             blocks: [],
             lastAnswer: '',
             answer: '',
@@ -684,9 +701,10 @@ class ChatWindow {
         this._scrollToBottom();
     }
 
-    _addStaticAssistantMessage(text) {
+    _addStaticAssistantMessage(text, metrics = null) {
         this._beginAssistantMessage();
         this._current.answer = text;
+        this._current.metrics = metrics ?? null;
         this._renderCurrent();
         this._finishAssistantMessage();
     }
@@ -710,7 +728,7 @@ class ChatWindow {
             current.box.append(copy);
         }
 
-        return current.answer;
+        return {answer: current.answer, metrics: current.metrics ?? null};
     }
 
     _failAssistantMessage(message) {
@@ -719,6 +737,7 @@ class ChatWindow {
             return;
         current.failed = true;
         current.reasoning.set_visible(false);
+        current.metricsLabel.set_visible(false);
 
         for (const entry of current.blocks)
             current.contentBox.remove(entry.widget);
@@ -786,6 +805,16 @@ class ChatWindow {
         const stick = this._isAtBottom();
         if (current.reasoning.get_text() !== current.reasoningText)
             current.reasoning.set_text(current.reasoningText);
+
+        if (current.metricsLabel) {
+            const metricsText = current.metrics
+                ? formatMetrics(current.metrics)
+                : '';
+            if (current.metricsLabel.get_text() !== metricsText)
+                current.metricsLabel.set_text(metricsText);
+            current.metricsLabel.set_visible(Boolean(metricsText));
+        }
+
         if (current.lastAnswer !== current.answer) {
             current.lastAnswer = current.answer;
             this._renderMarkdown(current);
@@ -1121,17 +1150,23 @@ class ChatWindow {
                 case 'notice':
                     this._appendNotice(event.text);
                     break;
+                case 'metrics':
+                    if (this._current)
+                        this._current.metrics = event.metrics;
+                    this._scheduleRender();
+                    break;
                 }
             }
 
             if (cancellable.is_cancelled())
                 return;
 
-            const answer = this._finishAssistantMessage();
-            if (answer?.trim()) {
+            const result = this._finishAssistantMessage();
+            if (result?.answer?.trim()) {
                 this._conversation.messages.push({
                     role: 'assistant',
-                    content: answer,
+                    content: result.answer,
+                    metrics: result.metrics,
                 });
                 this._store.upsert(this._conversation);
             }
@@ -1163,6 +1198,7 @@ class ChatWindow {
             this._conversation.messages.push({
                 role: 'assistant',
                 content: this._current.answer,
+                metrics: this._current.metrics ?? null,
             });
             this._store.upsert(this._conversation);
         } else if (this._current && !this._current.failed &&

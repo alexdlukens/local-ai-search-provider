@@ -30,9 +30,13 @@ flowchart LR
         CW --> MD[lib/markdown.js]
     end
 
+    MX[lib/metrics.js]
+    SP --> MX
+    CW --> MX
+
     CE --> OC
     OC -->|"SSE / JSON"| MS[(OpenAI-compatible server)]
-    TL -->|HTTPS| WEB[(Open-Meteo, World Bank,<br/>Wikipedia, Frankfurter)]
+    TL -->|HTTPS| WEB[(Open-Meteo, World Bank,<br/>Wikipedia, Frankfurter,<br/>DuckDuckGo, fetched pages)]
     MC -->|"Streamable HTTP"| MCP[(MCP servers)]
     CS -->|"read/write"| JSON[(chats.json)]
     SP -->|"subprocess"| CW
@@ -67,15 +71,24 @@ sequenceDiagram
     P->>C: GET /models (if model is Auto)
     C->>S: GET /models
     S-->>C: model list
+    P->>C: GET /props or /models (context window, best effort)
+    C->>S: GET /props or /models
+    S-->>C: n_ctx / max_model_len if exposed
     P->>R: "Loading model…" (optional progress poll)
-    P->>C: POST /chat/completions (stream)
+    P->>P: metrics start (t0 for TTFT)
+    P->>C: POST /chat/completions (stream, include_usage)
     C->>S: request
     loop SSE chunks
         S-->>C: data: {choices:[{delta}]}
         C-->>P: content / reasoning
         P->>R: throttled render every 60 ms
+        P->>P: first delta → TTFT measured client-side
+        P->>R: throttled metrics render
     end
-    P->>P: persist conversation
+    S-->>C: final chunk with usage / timings
+    C-->>P: token counts and tok/s
+    P->>R: final metrics
+    P->>P: persist conversation with metrics
 ```
 
 The provider is created in `extension.js` and registered with
@@ -97,6 +110,10 @@ Key behaviors in `searchProvider.js`:
 - Disabling the extension cancels requests, stops the model watcher, finalizes
   the conversation, and destroys the chat store and HTTP client.
 - `LAUNCH_GUARD_MS` prevents a double activation from opening two windows.
+- Activating the answer or the history row calls `Main.overview.hide()` when
+  the chat window is launched, so the window is visible without pressing
+  `Escape`. If the answer has not started streaming yet, the pending question
+  is handed to the chat window, which sends it immediately.
 
 The overview row is a `St.Button` containing a `St.BoxLayout`. It uses a
 lightweight `Gio.AppInfo` stand-in so the shell renders it as a full-width list
@@ -112,22 +129,53 @@ result rather than an application grid tile.
    frames. It also handles servers that ignore streaming and return one JSON
    object.
 3. Content, reasoning, and tool-call deltas are yielded to the caller.
-4. If the model requested tools, `chatEngine.js` appends an assistant message
+4. `lib/metrics.js` tracks the turn and yields `{type: 'metrics', metrics}`
+   events while streaming; the terminating `done` event carries the final
+   metrics object too.
+5. If the model requested tools, `chatEngine.js` appends an assistant message
    with `tool_calls`, executes each tool, appends `tool` messages, and starts
    another round.
-5. `Maximum tool rounds` caps the loop. Exceeding it yields a notice and a
+6. `Maximum tool rounds` caps the loop. Exceeding it yields a notice and a
    `done` event instead of looping.
+
+The metrics object has these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `ttftMs` | Time from request start to the first streamed token, measured client-side. |
+| `elapsedMs` | Wall-clock time for the turn. |
+| `promptTokens` | Prompt tokens reported by the server (summed across tool rounds); no estimate is made. |
+| `promptTps` | Prompt processing speed in tokens per second. |
+| `genTokens` | Generated tokens reported by the server (or an estimate). |
+| `genTps` | Generation speed in tokens per second. |
+| `contextTokens` | Prompt plus generated tokens used against the context window. |
+| `contextWindow` | Discovered context size, when known. |
+| `contextPct` | Context used as a percentage; omitted when the window is unknown. |
+| `estimated` | True when generated token counts fall back to a ~4-chars-per-token estimate. |
+| `rounds` | Number of tool rounds in the turn. |
+
+Values come from the server's `usage` (requested through
+`stream_options.include_usage`) and llama.cpp-style `timings` in the final SSE
+chunk. TTFT is always measured client-side. Estimates are prefixed with `~` in
+the UI. Non-streaming servers can only report TTFT after the whole response
+arrives. The context window is discovered best-effort from llama.cpp `/props`
+(`default_generation_settings.n_ctx`) or `/models`
+(`max_model_len`/`context_length`).
 
 Tool definitions come from `lib/toolRegistry.js`:
 
-- Always: `get_datetime`, `get_system_info`, `open_application`.
+- Always: `get_datetime`, `get_system_info`.
 - With web tools: `get_weather`, `get_country_info`, `search_wikipedia`,
-  `convert_currency`.
+  `web_search`, `fetch_url`, `convert_currency`.
 - With MCP enabled: discovered tools renamed to
   `mcp__<sanitized-server>__<sanitized-tool>`, with duplicate names suffixed.
 
-`open_application` is the only tool with a side effect. It searches
-`Gio.AppInfo.get_all()` for a matching desktop entry and calls `launch()`.
+All built-in tools are read-only. `open_application` was removed, so the model
+cannot launch desktop applications and GNOME Shell's application search is not
+intercepted. `web_search` reads DuckDuckGo's HTML results; `fetch_url` performs
+one guarded HTTP GET, rejects loopback/private/link-local/reserved addresses
+(including resolved DNS answers and every redirect hop), caps the body at
+2 MiB, and returns text only. Neither tool spawns processes or evaluates code.
 
 ## MCP client
 
@@ -160,8 +208,9 @@ MCP tool output is converted to text and truncated to the same
   writes, so the overview and chat window see each other's changes.
 - At most 100 conversations are kept, sorted by `updated`.
 
-Only `role` and `content` are stored per message. Tool calls, tool results, and
-reasoning are not persisted.
+Assistant messages may also store a `metrics` object from `lib/metrics.js`, so
+reopening a saved chat shows the same per-turn values. Tool calls, tool
+results, and reasoning are not persisted.
 
 ## Markdown rendering
 
@@ -218,5 +267,8 @@ platform libraries already present on a GNOME Shell 50 system.
   suitable for very large histories or multi-user machines.
 - Settings, including secrets, live in dconf. This matches GNOME extension
   conventions but is not secure storage.
+- Metrics depend on server cooperation. Without `usage`/`timings`, generated
+  counts and speeds are estimates, and a context percentage needs a context
+  size from `/props` or `/models`.
 - GNOME Shell's search-provider API is not stable across major releases. The
   extension targets Shell 50's `addProvider()` API only.

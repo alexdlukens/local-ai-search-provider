@@ -11,6 +11,7 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 import {OpenAIClient, normalizeEndpoint} from './lib/openaiClient.js';
 import {launchChatWindow} from './lib/launch.js';
 import {parseMcpServers, listMcpTools} from './lib/mcp.js';
+import {addResettableEntry} from './lib/prefsRows.js';
 
 const CHECK_DEBOUNCE_MS = 600;
 const CHECK_TIMEOUT_SECONDS = 8;
@@ -535,7 +536,9 @@ export default class AiSearchPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         behaviourGroup.add(reasoningRow);
 
-        addEntry(behaviourGroup, settings, 'system-prompt', 'System prompt');
+        const systemPromptRow = addResettableEntry(
+            behaviourGroup, settings, 'system-prompt', 'System prompt');
+        cleanup.push(systemPromptRow.destroy);
 
         // --- Chats ----------------------------------------------------------
         const chatsGroup = new Adw.PreferencesGroup({
@@ -571,7 +574,7 @@ export default class AiSearchPreferences extends ExtensionPreferences {
             title: 'Tools',
             description: 'Read-only tools return data inline: get_datetime, ' +
                 'get_system_info, get_weather, get_country_info, ' +
-                'search_wikipedia, convert_currency, and open_application.',
+                'search_wikipedia, and convert_currency.',
         });
         page.add(toolsGroup);
 
@@ -585,8 +588,9 @@ export default class AiSearchPreferences extends ExtensionPreferences {
 
         const webToolsRow = new Adw.SwitchRow({
             title: 'Enable web data tools',
-            subtitle: 'Weather, country and population lookups, Wikipedia search ' +
-                'and currency conversion. Results come back inline; nothing opens a browser.',
+            subtitle: 'Weather, country and population lookups, Wikipedia and ' +
+                'web search, page reading, and currency conversion. Results ' +
+                'come back inline; nothing opens a browser.',
         });
         settings.bind('enable-web-tools', webToolsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);

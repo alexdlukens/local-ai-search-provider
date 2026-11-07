@@ -4,8 +4,8 @@
 > **AI-generated project.** This extension and its documentation were written
 > largely with AI coding assistants. The code has not been security-audited.
 > It runs inside GNOME Shell with your full user privileges: it can read
-> system information, launch applications, and send data to the model, MCP, and
-> web endpoints you configure. Review the code before installing it, keep
+> system information and send data to the model, MCP, and web endpoints you
+> configure. Review the code before installing it, keep
 > secrets out of shared machines, and use it at your own risk. Model output can
 > be wrong; verify anything important. This project is not affiliated with or
 > endorsed by GNOME.
@@ -23,9 +23,9 @@ Super → "explain the difference between TCP and UDP" → live answer
 The model runs on your machine by default, with no account, telemetry, or
 hosted backend. The extension talks to whatever OpenAI-compatible server you
 configure. The built-in web data tools are enabled by default and contact
-Open-Meteo, the World Bank, Wikipedia, and Frankfurter when the model calls
-them; turn **Enable web data tools** off for a fully local setup. MCP servers
-are opt-in and contacted only when enabled.
+Open-Meteo, the World Bank, Wikipedia, Frankfurter, and DuckDuckGo when the
+model calls them; turn **Enable web data tools** off for a fully local setup.
+MCP servers are opt-in and contacted only when enabled.
 
 ## Features
 
@@ -37,8 +37,11 @@ are opt-in and contacted only when enabled.
   `/v1/load-progress`.
 - Works with local servers that implement the OpenAI chat-completions API:
   Unsloth Studio, llama.cpp's `llama-server`, Ollama, and LM Studio.
-- Built-in tools for date/time, system information, launching applications,
-  weather, country/population data, Wikipedia, and currency conversion.
+- Built-in tools for date/time, system information, weather,
+  country/population data, Wikipedia, currency conversion, web search, and
+  reading a specific web page.
+- Live per-turn metrics under the answer and in the chat window: time to first
+  token, prompt processing and generation speed, and token/context usage.
 - Optional [Model Context Protocol](https://modelcontextprotocol.io/) (MCP)
   servers for additional tools.
 - Optional thinking, plus a display-only reasoning switch.
@@ -108,7 +111,7 @@ The full walkthrough, including server setup for each backend, is in
 | Surface | What it does |
 | --- | --- |
 | **Overview answer** | Streams the answer into a full-width result row. **Loading model…** appears while a cold model starts. |
-| **Answer row → click/Enter** | Opens the answer in the chat window. Pressing Enter before the answer starts streaming is fine: the question is sent from the chat window instead. Follow-ups send the earlier turns to the model. |
+| **Answer row → click/Enter** | Opens the answer in the chat window and closes the overview search, so the window is visible without pressing Escape. Pressing Enter before the answer starts streaming is fine: the question is sent from the chat window instead. Follow-ups send the earlier turns to the model. |
 | **AI chat history** row | Opens the saved-conversation list. |
 | **AI Chats** app | Opens the chat window directly from the application grid. |
 | **Settings → Chats** | Opens the same conversation list. |
@@ -132,12 +135,12 @@ gnome-extensions prefs ai-search@alexdlukens.github.io
 | Endpoint URL | `http://127.0.0.1:8888/v1` | Base URL. A bare `host:port` gets `http://` and `/v1` added. A green check or red X shows whether the API is responding. |
 | API key | empty | Optional `Authorization: Bearer` token. |
 | Model | Auto | Populated from `/v1/models`; leave on Auto to use the loaded model or the first advertised one. |
-| System prompt | Markdown answer request | Prepended to every query. |
+| System prompt | Markdown + verify-freshness instructions | Prepended to every query. Tells the model to check time-sensitive facts with the tools instead of memory. The undo button on the row drops your custom text and restores this default. |
 | Debounce | 400 ms | Extra wait after typing stops, on top of the shell's own 150 ms. |
 | Enable thinking | on | Sends `enable_thinking: false` / `reasoning_effort: none` when disabled. Servers without thinking support ignore it. |
 | Show reasoning | off | Displays `reasoning_content` in the result row and chat window. Requires thinking. |
 | Enable tools | on | Lets the model call tools through function calling. |
-| Enable web data tools | on | Weather, country/population, Wikipedia, and currency tools. Results return inline; no browser opens. |
+| Enable web data tools | on | Weather, country/population, Wikipedia, currency, web search, and page-fetch tools. Results return inline; no browser opens. |
 | Enable MCP tools | off | Discovers tools from the configured MCP servers. |
 | Maximum tool rounds | 3 | Caps tool-call/answer loops per query. |
 
@@ -153,11 +156,17 @@ client-side and results are returned inline in the answer and chat window.
 | --- | --- |
 | `get_datetime` | Current local date, time, and timezone. |
 | `get_system_info` | OS, hostname, user, GNOME version, session type, CPU, memory, and uptime. |
-| `open_application` | Opens an installed application by name. This is the only tool with a side effect. |
 | `get_weather` | Current conditions and a 1–5 day forecast from Open-Meteo. |
 | `get_country_info` | Latest World Bank population, capital, region, income level, and a Wikipedia summary. |
 | `search_wikipedia` | Wikipedia search results with summaries and links. |
+| `web_search` | DuckDuckGo result titles, URLs, and snippets for arbitrary queries. |
+| `fetch_url` | Readable text of one public http(s) page; HTML tags are stripped. |
 | `convert_currency` | Reference exchange rates from Frankfurter. |
+
+The built-in tools are read-only: they read local information or query web
+providers. The former `open_application` tool was removed, so the model cannot
+launch desktop applications and GNOME Shell's own application search is not
+intercepted.
 
 In the chat window, each tool result appears as an inline expandable card above
 the answer, so you can inspect the source data. The overview row shows only the
@@ -202,18 +211,20 @@ Use **Save & test** in settings to initialize the server and list its tools,
 then turn **Enable MCP tools** on. Up to 10 servers are supported; tools are
 cached briefly after discovery.
 
-For general web search, add a hosted search MCP server (for example Exa,
-Tavily, or Brave). The built-in tools intentionally avoid scraping search
-engines.
+The built-in `web_search` tool queries DuckDuckGo's HTML endpoint, which needs
+no API key but is unofficial and can rate-limit or refuse requests. If you need
+a guaranteed quota, add a hosted search MCP server (for example Exa, Tavily, or
+Brave) and let the model prefer that tool.
 
 ## Privacy and security
 
 - The model endpoint receives your query, system prompt, and prior
   conversation turns. Run the server locally and keep it bound to loopback
   unless you understand the exposure.
-- Web tools send only their arguments (city, country, article query, currency
-  pair) to Open-Meteo, the World Bank, Wikipedia, and Frankfurter. MCP tools
-  send their arguments to the configured MCP server.
+- Web tools send their arguments (city, country, article or search query,
+  currency pair, URL) to Open-Meteo, the World Bank, Wikipedia, Frankfurter,
+  DuckDuckGo, or the site being fetched. MCP tools send their arguments to the
+  configured MCP server.
 - The API key and MCP `Authorization` headers are stored as **plain text in
   dconf**, like all extension settings. Use scoped tokens.
 - Chat history is **plain JSON** in `~/.local/share/ai-search/chats.json`; it is
@@ -221,9 +232,14 @@ engines.
 - The extension has no telemetry, analytics, or update service of its own.
 - Model output is untrusted. Markdown is escaped before rendering, raw HTML is
   shown as text, and links are restricted to `http(s)` and `mailto`.
-- `open_application` and file/system reads happen because the model asked for
-  them. Disable tools if you do not want that capability. See
-  [SECURITY.md](SECURITY.md) for the full threat model.
+- The remaining built-in tools are read-only: system information, weather,
+  country/population data, Wikipedia, currency rates, web search, and page
+  fetching. They run because the model asked for them; disable tools if you do
+  not want that capability. `fetch_url` refuses loopback, private, link-local,
+  and reserved addresses at every redirect hop, so the model cannot use it to
+  probe local services. Turn metrics are computed locally and only stored in
+  the chat JSON; they are not sent anywhere. See [SECURITY.md](SECURITY.md) for
+  the full threat model.
 
 ## Limitations
 
@@ -233,6 +249,11 @@ engines.
   own tooling.
 - Tool calling depends on the model and server. Some small models emit invalid
   JSON or ignore tools.
+- Metrics depend on the server reporting `usage`/`timings`. When usage is
+  missing, generated token counts and speeds are ~4-chars-per-token estimates
+  marked with `~`; prompt counts and speeds may be absent. A context percentage
+  requires a discoverable context size from `/props` or `/models`; otherwise
+  only absolute tokens are shown.
 - Reasoning is displayed only when the server streams `reasoning_content` (or
   `reasoning`). Turning thinking off is a request, not a guarantee.
 - MCP support is limited to Streamable HTTP; stdio servers are not supported.
@@ -284,6 +305,7 @@ provider.
 | `lib/tools.js` | Built-in local and web tools. |
 | `lib/mcp.js` | Streamable HTTP MCP client and tool discovery. |
 | `lib/markdown.js` | Dependency-free Markdown → Pango renderer. |
+| `lib/metrics.js` | Turn metrics tracker and formatter (TTFT, tok/s, context usage). |
 | `lib/chatStore.js` | JSON conversation store shared by both processes. |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the process model, request

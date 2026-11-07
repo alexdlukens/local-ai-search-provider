@@ -34,9 +34,11 @@ window is a separate GJS process with the same user permissions.
 - Your settings, including the model API key and any MCP `Authorization`
   headers, stored as plain text in dconf.
 - `~/.local/share/ai-search/chats.json`, containing full conversation text.
+- Turn metrics (TTFT, token speeds, token and context usage) are computed
+  locally and written to `chats.json` with the conversation. They create no new
+  network exposure.
 - Basic system information exposed by the built-in `get_system_info` tool: OS,
   hostname, username, GNOME version, session type, CPU, memory, and uptime.
-- Installed desktop applications, through `open_application`.
 - The network endpoints you configure: the model server, MCP servers, and the
   built-in web tool providers.
 
@@ -45,20 +47,28 @@ window is a separate GJS process with the same user permissions.
 Model output is untrusted input:
 
 - It can request any enabled tool with arbitrary arguments.
-- It can request `open_application` for any installed desktop entry. It cannot
-  pass a shell command; the tool resolves a desktop app by name and calls
-  `Gio.AppInfo.launch()`.
+- Built-in tools are read-only. The `open_application` tool was removed, so the
+  model cannot launch installed desktop applications.
 - It can cause requests to the built-in web providers with model-chosen
-  locations, country names, search terms, or currency pairs. Those tools do not
-  accept arbitrary URLs.
+  locations, country names, search terms, currency pairs, or public URLs.
+- `fetch_url` accepts arbitrary `http(s)` URLs but refuses loopback, private,
+  link-local, multicast, and reserved addresses. It checks both literal
+  addresses and every address returned by the system resolver, re-validating
+  each redirect hop. This blocks ordinary use of the tool as a local-network
+  scanner; it is not a guarantee against DNS rebinding between the check and
+  the connection.
+- `web_search` and `fetch_url` only read. They cannot run shell commands,
+  evaluate code, or write files, and page text is returned to the model as
+  data.
 - MCP tool calls are forwarded to the configured MCP server. What that server
   does with the arguments is outside this project's control.
 - Prompt injection is possible through web results, tool results, MCP output,
-  or the model itself. An injected instruction can attempt to trigger tools.
+  or the model itself. An injected instruction can attempt to trigger tools;
+  a fetched page can try to steer the model into fetching other public pages.
 
-The extension does **not** include an arbitrary URL or browser tool. Markdown
-links are restricted to `http(s)` and `mailto` and open through the desktop's
-default handler when clicked.
+The extension includes no shell, code-execution, file-write, or browser tool.
+Markdown links are restricted to `http(s)` and `mailto` and open through the
+desktop's default handler when clicked.
 
 ### Secrets
 
