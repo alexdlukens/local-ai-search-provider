@@ -109,6 +109,11 @@ Key behaviors in `searchProvider.js`:
   `MAX_REASONING_CHARS`) before rendering.
 - Disabling the extension cancels requests, stops the model watcher, finalizes
   the conversation, and destroys the chat store and HTTP client.
+- The provider watches `Main.overview.searchController`'s `search-active`
+  property. When it turns false without the answer row being activated
+  (overview hidden, app grid opened, another result launched, query cleared),
+  the in-flight request is cancelled and the partial turn is dropped instead of
+  being saved.
 - `LAUNCH_GUARD_MS` prevents a double activation from opening two windows.
 - Activating the answer or the history row calls `Main.overview.hide()` when
   the chat window is launched, so the window is visible without pressing

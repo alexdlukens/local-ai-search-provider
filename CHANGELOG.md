@@ -42,6 +42,10 @@ All notable changes to this project are documented here. The format follows
   no tool can confirm it.
 - Opening the chat window from the overview answer or history row now
   dismisses the overview search, so no `Escape` is needed.
+- Leaving the overview search without opening the answer — hiding the
+  overview, opening the app grid, launching another result, or clearing the
+  query — now cancels the in-flight answer. The partial reply is discarded and
+  is not written to chat history.
 
 ### Removed
 

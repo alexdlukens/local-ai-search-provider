@@ -171,6 +171,10 @@ export class AiSearchProvider {
         this._modelWatch = null;
         this._lastLaunch = 0;
         this._destroyed = false;
+        this._searchController = null;
+        this._searchActiveId = 0;
+
+        this._watchSearchState();
     }
 
     get id() {
@@ -334,6 +338,15 @@ export class AiSearchProvider {
         this._cancelWork();
         this._stopModelWatch();
         this._finalizeConversation(false);
+        if (this._searchController && this._searchActiveId) {
+            try {
+                this._searchController.disconnect(this._searchActiveId);
+            } catch {
+                // The controller is already gone
+            }
+        }
+        this._searchController = null;
+        this._searchActiveId = 0;
         this._store?.destroy();
         this._store = null;
         this._client.destroy();
@@ -351,6 +364,43 @@ export class AiSearchProvider {
             return false;
         this._lastLaunch = now;
         return true;
+    }
+
+    _watchSearchState() {
+        this._searchController = Main.overview?.searchController ?? null;
+        if (!this._searchController)
+            return;
+
+        this._searchActiveId = this._searchController.connect(
+            'notify::search-active', () => this._onSearchActiveChanged());
+    }
+
+    _onSearchActiveChanged() {
+        if (this._destroyed || this._searchController?.searchActive)
+            return;
+
+        this._abandonSearch();
+    }
+
+    // The user left the shell search (closed the overview, opened the app
+    // grid, launched another result, ...) without opening this answer. Stop
+    // the request and drop the turn so it never reaches saved chat history.
+    _abandonSearch() {
+        if (!this._conversation || this._turnFinalized)
+            return;
+
+        this._cancelWork();
+        this._stopModelWatch();
+        this._serial += 1;
+        this._busy = false;
+        this._conversation = null;
+        this._answer = '';
+        this._reasoning = '';
+        this._reasoningActive = false;
+        this._metrics = null;
+        this._status = '';
+        this._error = '';
+        this._render();
     }
 
     _watchShellCancellable(cancellable) {
