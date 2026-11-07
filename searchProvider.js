@@ -5,20 +5,24 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {AiResultRow} from './lib/resultView.js';
+import {AiResultRow, AiHistoryRow} from './lib/resultView.js';
 import {OpenAIClient, normalizeEndpoint, ApiError} from './lib/openaiClient.js';
-import {TOOL_DEFINITIONS, executeTool, truncateToolResult} from './lib/tools.js';
+import {TOOL_DEFINITIONS} from './lib/tools.js';
+import {runChat, buildMessages} from './lib/chatEngine.js';
+import {ChatStore, titleFor} from './lib/chatStore.js';
+import {ModelWatch, formatModelState} from './lib/modelWatch.js';
+import {launchChatWindow} from './lib/launch.js';
 
 const RESULT_ID = 'ai-answer';
+const HISTORY_RESULT_ID = 'ai-chat-history';
 const MIN_QUERY_LENGTH = 2;
 const FLUSH_INTERVAL_MS = 60;
 const MAX_ANSWER_CHARS = 60000;
 const MAX_REASONING_CHARS = 24000;
+const LAUNCH_GUARD_MS = 600;
 
-const DEFAULT_SYSTEM_PROMPT =
-    'You are an AI assistant embedded in the GNOME Shell overview search. ' +
-    'Answer in plain text, concisely, because the answer is displayed in a narrow search result. ' +
-    'Avoid Markdown tables and long code blocks. Use the available tools when they help.';
+const EXTENSION_DIR = GLib.path_get_dirname(
+    GLib.filename_from_uri(import.meta.url)[0]);
 
 // Search providers without an appInfo are rendered as a grid, which is a poor
 // fit for a long streamed answer. A lightweight stand-in gives us the list
@@ -143,6 +147,7 @@ export class AiSearchProvider {
         this._settings = settings;
         this._appInfo = new AiAppInfo();
         this._client = new OpenAIClient();
+        this._store = new ChatStore();
 
         this._query = '';
         this._answer = '';
@@ -150,6 +155,9 @@ export class AiSearchProvider {
         this._status = '';
         this._error = '';
         this._busy = false;
+        this._conversation = null;
+        this._turnFinalized = false;
+        this._reasoningActive = false;
 
         this._display = null;
         this._debounceId = 0;
@@ -158,6 +166,8 @@ export class AiSearchProvider {
         this._requestCancellable = null;
         this._shellCancellable = null;
         this._shellCancellableId = 0;
+        this._modelWatch = null;
+        this._lastLaunch = 0;
         this._destroyed = false;
     }
 
@@ -178,7 +188,7 @@ export class AiSearchProvider {
     }
 
     get maxResults() {
-        return 1;
+        return 2;
     }
 
     // --- Search provider API -------------------------------------------------
@@ -196,7 +206,9 @@ export class AiSearchProvider {
 
         this._watchShellCancellable(cancellable);
         this._scheduleRequest();
-        return [RESULT_ID];
+
+        const results = [RESULT_ID, HISTORY_RESULT_ID];
+        return results;
     }
 
     getSubsearchResultSet(_previousResults, terms, cancellable) {
@@ -204,18 +216,38 @@ export class AiSearchProvider {
     }
 
     async getResultMetas(ids, _cancellable) {
-        return ids.map(id => ({
-            id,
-            name: 'AI Search',
-            description: '',
-            createIcon: size => new St.Icon({
-                icon_name: 'system-search-symbolic',
-                icon_size: size,
-            }),
-        }));
+        const chatCount = this._store?.list().length ?? 0;
+        return ids.map(id => {
+            if (id === HISTORY_RESULT_ID) {
+                return {
+                    id,
+                    name: 'AI chat history',
+                    description: chatCount === 0
+                        ? 'No saved chats yet'
+                        : (chatCount === 1 ? '1 saved chat' : `${chatCount} saved chats`),
+                    createIcon: size => new St.Icon({
+                        icon_name: 'document-open-recent-symbolic',
+                        icon_size: size,
+                    }),
+                };
+            }
+
+            return {
+                id,
+                name: 'AI Search',
+                description: '',
+                createIcon: size => new St.Icon({
+                    icon_name: 'system-search-symbolic',
+                    icon_size: size,
+                }),
+            };
+        });
     }
 
-    createResultObject(_meta) {
+    createResultObject(meta) {
+        if (meta?.id === HISTORY_RESULT_ID)
+            return new AiHistoryRow(this, meta.description ?? '');
+
         const row = new AiResultRow(this);
         row.connect('destroy', () => {
             if (this._display === row)
@@ -230,29 +262,69 @@ export class AiSearchProvider {
         return results.slice(0, max);
     }
 
-    activateResult(_id, _terms) {
-        this.copyAnswer();
+    activateResult(id, _terms) {
+        if (id === HISTORY_RESULT_ID)
+            this.openChatHistory();
+        else
+            this.openChat();
     }
 
     launchSearch() {
         this._extension.openPreferences();
     }
 
-    copyAnswer() {
-        const text = this._answer.trim();
-        if (!text) {
-            Main.notify('AI Search',
-                this._error || 'There is no answer to copy yet.');
+    /**
+     * Open the current answer in the chat window so it can be continued.
+     */
+    openChat() {
+        if (this._destroyed)
+            return;
+        if (!this._guardLaunch())
+            return;
+
+        this._cancelWork();
+        this._stopModelWatch();
+        this._finalizeConversation(Boolean(this._conversation));
+        this._busy = false;
+
+        const id = this._conversation?.id;
+        if (!id) {
+            Main.notify('AI Search', 'Ask a question first.');
             return;
         }
 
-        St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
-        Main.notify('AI Search', 'Answer copied to clipboard.');
+        try {
+            launchChatWindow(EXTENSION_DIR, {conversationId: id});
+        } catch (e) {
+            Main.notify('AI Search', `Could not open the chat window: ${e.message}`);
+        }
+    }
+
+    openChatHistory() {
+        if (this._destroyed)
+            return;
+        if (!this._guardLaunch())
+            return;
+
+        this._cancelWork();
+        this._stopModelWatch();
+        this._finalizeConversation(false);
+        this._busy = false;
+
+        try {
+            launchChatWindow(EXTENSION_DIR, {history: true});
+        } catch (e) {
+            Main.notify('AI Search', `Could not open the chat window: ${e.message}`);
+        }
     }
 
     destroy() {
         this._destroyed = true;
         this._cancelWork();
+        this._stopModelWatch();
+        this._finalizeConversation(false);
+        this._store?.destroy();
+        this._store = null;
         this._client.destroy();
         this._client = null;
         this._display = null;
@@ -261,6 +333,14 @@ export class AiSearchProvider {
     }
 
     // --- Request lifecycle ---------------------------------------------------
+
+    _guardLaunch() {
+        const now = GLib.get_monotonic_time() / 1000;
+        if (now - this._lastLaunch < LAUNCH_GUARD_MS)
+            return false;
+        this._lastLaunch = now;
+        return true;
+    }
 
     _watchShellCancellable(cancellable) {
         if (!cancellable)
@@ -300,12 +380,28 @@ export class AiSearchProvider {
     }
 
     _resetState(query) {
+        // Keep a partial answer if the user typed a new query mid-stream.
+        this._finalizeConversation(false);
+        this._stopModelWatch();
+        this._serial += 1;
+
         this._query = query;
         this._answer = '';
         this._reasoning = '';
+        this._reasoningActive = false;
         this._status = '';
         this._error = '';
         this._busy = false;
+        this._turnFinalized = false;
+        this._conversation = query
+            ? {
+                id: GLib.uuid_string_random(),
+                title: titleFor(query),
+                created: Date.now(),
+                updated: Date.now(),
+                messages: [{role: 'user', content: query}],
+            }
+            : null;
         this._render();
     }
 
@@ -319,7 +415,7 @@ export class AiSearchProvider {
     }
 
     async _startRequest() {
-        if (this._destroyed)
+        if (this._destroyed || !this._conversation)
             return;
 
         const serial = ++this._serial;
@@ -335,114 +431,55 @@ export class AiSearchProvider {
             if (serial !== this._serial)
                 return;
 
-            const showReasoning = this._settings.get_boolean('show-reasoning');
+            this._startModelWatch(serial, baseUrl, apiKey, model, cancellable);
+
+            const enableThinking = this._settings.get_boolean('enable-thinking');
             const toolsEnabled = this._settings.get_boolean('enable-tools');
             const maxRounds = Math.max(0, this._settings.get_int('max-tool-rounds'));
-            const messages = this._buildMessages();
+            const messages = buildMessages(
+                this._settings.get_string('system-prompt'),
+                this._conversation.messages);
 
-            let round = 0;
-            while (true) {
-                const roundContent = {text: ''};
-                const toolCalls = [];
-                let firstReasoningChunk = true;
-
-                for await (const event of this._client.streamChat({
-                    baseUrl,
-                    apiKey,
-                    model,
-                    messages,
-                    tools: toolsEnabled ? TOOL_DEFINITIONS : null,
-                    cancellable,
-                })) {
-                    if (serial !== this._serial || cancellable.is_cancelled())
-                        return;
-
-                    switch (event.type) {
-                    case 'content':
-                        roundContent.text += event.text;
-                        if (this._answer.length < MAX_ANSWER_CHARS) {
-                            this._answer += event.text;
-                            this._scheduleFlush();
-                        }
-                        this._setStatus('Responding…');
-                        break;
-                    case 'reasoning':
-                        if (showReasoning && this._reasoning.length < MAX_REASONING_CHARS) {
-                            if (firstReasoningChunk && this._reasoning.trim())
-                                this._reasoning += '\n\n';
-                            this._reasoning += event.text;
-                            this._scheduleFlush();
-                        }
-                        firstReasoningChunk = false;
-                        this._setStatus('Thinking…');
-                        break;
-                    case 'done':
-                        for (const call of event.toolCalls)
-                            toolCalls.push(call);
-                        break;
-                    }
-                }
-
+            for await (const event of runChat({
+                client: this._client,
+                baseUrl,
+                apiKey,
+                model,
+                messages,
+                tools: toolsEnabled ? TOOL_DEFINITIONS : null,
+                enableThinking,
+                maxToolRounds: maxRounds,
+                cancellable,
+            })) {
                 if (serial !== this._serial || cancellable.is_cancelled())
                     return;
 
-                if (toolCalls.length === 0) {
-                    if (!this._answer.trim())
-                        this._answer = '(The model returned an empty answer.)';
+                switch (event.type) {
+                case 'content':
+                    this._appendAnswer(event.text);
+                    this._reasoningActive = false;
+                    this._stopModelWatch();
+                    this._setStatus('Responding…');
+                    break;
+                case 'reasoning':
+                    this._appendReasoning(event.text);
+                    this._setStatus('Thinking…');
+                    break;
+                case 'status':
+                    this._reasoningActive = false;
+                    this._setStatus(event.text);
+                    break;
+                case 'notice':
+                    this._appendNotice(event.text);
                     break;
                 }
-
-                if (!toolsEnabled) {
-                    this._answer += `${this._answer ? '\n\n' : ''}` +
-                        '(The model requested a tool, but tools are disabled in preferences.)';
-                    break;
-                }
-
-                if (round >= maxRounds) {
-                    this._answer += `${this._answer ? '\n\n' : ''}` +
-                        '(Tool call limit reached.)';
-                    break;
-                }
-
-                round += 1;
-                const normalized = toolCalls.map((call, index) => ({
-                    id: call.id || `call_${round}_${index}`,
-                    type: 'function',
-                    function: {
-                        name: call.function.name,
-                        arguments: call.function.arguments || '{}',
-                    },
-                }));
-
-                messages.push({
-                    role: 'assistant',
-                    content: roundContent.text || null,
-                    tool_calls: normalized,
-                });
-
-                for (const call of normalized) {
-                    if (serial !== this._serial || cancellable.is_cancelled())
-                        return;
-                    this._setStatus(`Running ${call.function.name}…`);
-                    let result;
-                    try {
-                        result = await executeTool(
-                            call.function.name, call.function.arguments);
-                    } catch (e) {
-                        result = `Tool error: ${e.message}`;
-                    }
-                    messages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: truncateToolResult(result),
-                    });
-                }
-
-                this._setStatus('Thinking…');
-                this._flushNow();
             }
 
-            this._setStatus(this._answer.trim() ? 'Press Enter to copy' : '');
+            if (serial !== this._serial || cancellable.is_cancelled())
+                return;
+
+            this._finalizeConversation(true);
+            this._setStatus('Enter to open chat');
         } catch (e) {
             if (serial !== this._serial || isCancelled(cancellable) || isCancellationError(e))
                 return;
@@ -452,21 +489,13 @@ export class AiSearchProvider {
             if (serial === this._serial) {
                 this._busy = false;
                 this._requestCancellable = null;
+                this._stopModelWatch();
                 this._flushNow();
             }
         }
     }
 
-    _buildMessages() {
-        const messages = [];
-        const prompt = this._settings.get_string('system-prompt').trim() ||
-            DEFAULT_SYSTEM_PROMPT;
-        messages.push({role: 'system', content: prompt});
-        messages.push({role: 'user', content: this._query});
-        return messages;
-    }
-
-    async _resolveModel(baseUrl, apiKey, cancellable) {
+    _resolveModel(baseUrl, apiKey, cancellable) {
         const configured = this._settings.get_string('model').trim();
         if (configured)
             return configured;
@@ -474,7 +503,87 @@ export class AiSearchProvider {
         return this._client.discoverModel({baseUrl, apiKey, cancellable});
     }
 
+    _startModelWatch(serial, baseUrl, apiKey, model, cancellable) {
+        this._stopModelWatch();
+        if (!model)
+            return;
+
+        const watch = new ModelWatch({
+            client: this._client,
+            baseUrl,
+            apiKey,
+            model,
+            cancellable,
+            onUpdate: state => {
+                if (this._destroyed || serial !== this._serial)
+                    return;
+                if (state.loading) {
+                    const text = formatModelState(state);
+                    if (text)
+                        this._setStatus(text);
+                } else if (this._status.startsWith('Loading model')) {
+                    this._setStatus('Thinking…');
+                }
+            },
+        });
+        this._modelWatch = watch;
+        watch.start();
+    }
+
+    _stopModelWatch() {
+        if (this._modelWatch) {
+            this._modelWatch.stop();
+            this._modelWatch = null;
+        }
+    }
+
+    _finalizeConversation(force) {
+        if (!this._conversation || this._turnFinalized)
+            return;
+
+        const answer = this._answer.trim();
+        if (!answer && !force)
+            return;
+
+        this._turnFinalized = true;
+        if (answer) {
+            this._conversation.messages.push({
+                role: 'assistant',
+                content: this._answer,
+            });
+        }
+        this._store?.upsert(this._conversation);
+    }
+
     // --- Display -------------------------------------------------------------
+
+    _appendAnswer(text) {
+        if (!text || this._answer.length >= MAX_ANSWER_CHARS)
+            return;
+        const remaining = MAX_ANSWER_CHARS - this._answer.length;
+        this._answer += text.length > remaining ? text.slice(0, remaining) : text;
+        this._scheduleFlush();
+    }
+
+    _appendNotice(text) {
+        this._appendAnswer(`${this._answer ? '\n\n' : ''}${text}`);
+    }
+
+    _appendReasoning(text) {
+        if (!text || !this._settings.get_boolean('show-reasoning'))
+            return;
+        if (this._reasoning.length >= MAX_REASONING_CHARS)
+            return;
+
+        if (!this._reasoningActive && this._reasoning.trim()) {
+            this._reasoning += '\n\n';
+        }
+        this._reasoningActive = true;
+
+        const remaining = MAX_REASONING_CHARS - this._reasoning.length;
+        this._reasoning += text.length > remaining ? text.slice(0, remaining) : text;
+        this._scheduleFlush();
+    }
 
     _setStatus(status) {
         if (this._status === status)

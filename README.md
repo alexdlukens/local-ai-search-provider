@@ -4,13 +4,16 @@ GNOME Shell 50 search provider that sends your overview query to a local
 OpenAI-compatible model and streams the answer directly into the search results.
 
 - Streaming answers with a configurable typing debounce
+- Follow-up questions in a dedicated chat window with saved history
+- Model loading status with progress when the server reports it
 - Unsloth Studio / llama.cpp / Ollama / LM Studio compatible
 - Optional function calling with local tools
-- Optional streamed reasoning/thinking (off by default)
+- Optional thinking, plus a display-only reasoning switch
 - Configured through GNOME Extension Manager
 
 ```
-Super  ->  "explain the difference between TCP and UDP"  ->  live answer
+Super -> "explain the difference between TCP and UDP" -> live answer
+      -> click the answer -> keep asking follow-ups -> history is saved
 ```
 
 ## Requirements
@@ -47,20 +50,31 @@ button) and adjust:
 | Model | Auto | Dropdown populated from `/v1/models`; pick a downloaded model or leave it on Auto. Use the refresh button after downloading models. |
 | System prompt | concise plain-text answer | Prepended to every query. |
 | Debounce | 400 ms | Extra wait after typing stops, on top of the shell's own 150 ms. |
-| Show reasoning | off | When on, streams `reasoning_content` above the answer. |
+| Enable thinking | on | Lets reasoning-capable models think. Turning it off sends `enable_thinking: false` / `reasoning_effort: none`; servers and models without thinking support ignore it. |
+| Show reasoning | off | Displays `reasoning_content` in the result row and in the chat window. Requires thinking to be enabled. |
 | Enable tools | on | Exposes the local tools below. |
 | Maximum tool rounds | 3 | Caps tool-call/answer loops per query. |
 
 Changing the endpoint or API key automatically re-checks the server and refreshes the model list.
 
-Start typing in the overview. The AI section appears with app results. Press
-`Enter` on the AI row to copy the full answer to the clipboard; the overview
-stays open so you can keep reading while it streams.
+Start typing in the overview. The AI section appears with app results. While a
+cold model loads, the row says **Loading model…** (with a percentage when the
+server exposes `/v1/load-progress`) instead of leaving you with a generic
+spinner.
+
+Click the answer row (or press `Enter` on it) to open it in the chat window.
+There you can read the full transcript, ask follow-up questions, and copy any
+answer with its copy button. Follow-ups send the earlier turns to the model.
+
+The **AI chat history** row below the answer opens the list of saved
+conversations. The same list is available from **Settings -> AI Search ->
+Chats**, and from the chat window's history button. Conversations are stored as
+plain JSON in `~/.local/share/ai-search/chats.json`.
 
 ## Tools
 
 The model gets standard OpenAI function-calling definitions. Tool calls are
-executed client-side in the shell:
+executed client-side in the extension process:
 
 - `get_datetime` - current local date, time and timezone
 - `get_system_info` - OS, hostname, user, GNOME version, session, CPU, memory, uptime
@@ -73,10 +87,15 @@ calling, turn **Enable tools** off.
 
 ## Notes and limitations
 
-- The answer row is plain text; Markdown is shown as-is.
-- Every query is independent; there is no conversation history.
+- The answer row and chat window are plain text; Markdown is shown as-is.
+- A new overview query starts a new conversation. Click a result to continue
+  that conversation with follow-ups.
+- Chat history is stored locally in plain JSON. Follow-ups include earlier
+  turns, so the local server sees the whole conversation.
 - Reasoning is only displayed when the server emits `reasoning_content` (or
-  `reasoning`) and **Show reasoning** is on.
+  `reasoning`) and **Show reasoning** is on. Turning off **Enable thinking**
+  asks the server to skip reasoning generation entirely; servers that do not
+  understand the switch may keep thinking.
 - The API key is stored in dconf as plain text, like all extension settings.
   Keep the server bound to localhost if possible.
 - The extension targets GNOME Shell 50's search-provider API
@@ -107,3 +126,8 @@ make schemas        # compile GSettings
 make pack           # build dist/ai-search@local.zip
 make install        # copy into ~/.local/share/gnome-shell/extensions
 ```
+
+`chatWindow.js` runs as a separate GJS process so GTK and the shell's Clutter
+main loop never share a process. It uses the same `lib/` modules as the search
+provider (`chatEngine.js`, `openaiClient.js`, `tools.js`, `chatStore.js`,
+`modelWatch.js`).

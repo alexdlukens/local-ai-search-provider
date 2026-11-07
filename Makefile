@@ -10,7 +10,7 @@ schemas:
 
 install: schemas
 	mkdir -p $(EXTENSION_DIR)
-	cp -r metadata.json extension.js prefs.js searchProvider.js lib schemas stylesheet.css README.md $(EXTENSION_DIR)/
+	cp -r metadata.json extension.js prefs.js chatWindow.js searchProvider.js lib schemas stylesheet.css README.md $(EXTENSION_DIR)/
 	glib-compile-schemas $(EXTENSION_DIR)/schemas
 
 enable: install
@@ -21,8 +21,9 @@ pack: schemas
 	mkdir -p dist
 	gnome-extensions pack --force --out-dir=dist \
 		--extra-source=searchProvider.js \
+		--extra-source=chatWindow.js \
 		--extra-source=lib \
-		--extra-source=schemas \
+		--schema=schemas/org.gnome.shell.extensions.ai-search.gschema.xml \
 		--extra-source=README.md \
 		.
 

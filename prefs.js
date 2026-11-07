@@ -7,6 +7,7 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {OpenAIClient, normalizeEndpoint} from './lib/openaiClient.js';
+import {launchChatWindow} from './lib/launch.js';
 
 const CHECK_DEBOUNCE_MS = 600;
 const CHECK_TIMEOUT_SECONDS = 8;
@@ -390,9 +391,19 @@ export default class AiSearchPreferences extends ExtensionPreferences {
             'Debounce', 'Milliseconds to wait after typing stops', 0, 3000, 50);
         cleanup.push(() => debounce.row.disconnect(debounce.changedId));
 
+        const thinkingRow = new Adw.SwitchRow({
+            title: 'Enable thinking / reasoning',
+            subtitle: 'Let the model reason before answering. Turn off for faster ' +
+                'answers on models that support disabling thinking.',
+        });
+        settings.bind('enable-thinking', thinkingRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        behaviourGroup.add(thinkingRow);
+
         const reasoningRow = new Adw.SwitchRow({
             title: 'Show reasoning / thinking',
-            subtitle: 'Stream the model thinking process above the answer.',
+            subtitle: 'Display the thinking stream above the answer. Requires ' +
+                'thinking to be enabled and a model that streams reasoning.',
         });
         settings.bind('show-reasoning', reasoningRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
@@ -400,11 +411,40 @@ export default class AiSearchPreferences extends ExtensionPreferences {
 
         addEntry(behaviourGroup, settings, 'system-prompt', 'System prompt');
 
+        // --- Chats ----------------------------------------------------------
+        const chatsGroup = new Adw.PreferencesGroup({
+            title: 'Chats',
+            description: 'Click the AI result in the overview to open it in the ' +
+                'chat window and keep asking follow-up questions.',
+        });
+        page.add(chatsGroup);
+
+        const historyRow = new Adw.ActionRow({
+            title: 'Chat history',
+            subtitle: 'Reopen a previous conversation and continue it.',
+        });
+        const openHistoryButton = new Gtk.Button({
+            label: 'Open',
+            valign: Gtk.Align.CENTER,
+        });
+        openHistoryButton.add_css_class('flat');
+        const openHistoryId = openHistoryButton.connect('clicked', () => {
+            try {
+                launchChatWindow(this.path, {history: true});
+            } catch (e) {
+                logError(e);
+            }
+        });
+        historyRow.add_suffix(openHistoryButton);
+        historyRow.activatable_widget = openHistoryButton;
+        chatsGroup.add(historyRow);
+        cleanup.push(() => openHistoryButton.disconnect(openHistoryId));
+
         // --- Tools ----------------------------------------------------------
         const toolsGroup = new Adw.PreferencesGroup({
             title: 'Tools',
-            description: 'Tools run locally in the shell: get_datetime, ' +
-                'get_system_info, open_application, open_url.',
+            description: 'Tools run locally in the extension or chat window: ' +
+                'get_datetime, get_system_info, open_application, open_url.',
         });
         page.add(toolsGroup);
 

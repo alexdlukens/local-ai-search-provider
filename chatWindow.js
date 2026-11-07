@@ -1,0 +1,971 @@
+// Standalone chat window, launched from the overview result. Runs in its own
+// process so GTK never shares a main loop with the shell's Clutter loop.
+
+import Adw from 'gi://Adw?version=1';
+import Gdk from 'gi://Gdk?version=4.0';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Gtk from 'gi://Gtk?version=4.0';
+import Pango from 'gi://Pango?version=1.0';
+
+import {OpenAIClient, normalizeEndpoint} from './lib/openaiClient.js';
+import {runChat, buildMessages} from './lib/chatEngine.js';
+import {TOOL_DEFINITIONS} from './lib/tools.js';
+import {ChatStore, titleFor} from './lib/chatStore.js';
+import {ModelWatch, formatModelState} from './lib/modelWatch.js';
+
+const UUID = 'ai-search@local';
+const SCHEMA_ID = 'org.gnome.shell.extensions.ai-search';
+const APP_ID = 'org.gnome.Shell.Extensions.AiSearch.Chat';
+const FLUSH_INTERVAL_MS = 60;
+const MAX_ANSWER_CHARS = 60000;
+const MAX_REASONING_CHARS = 24000;
+const EXTENSION_DIR = GLib.path_get_dirname(
+    GLib.filename_from_uri(import.meta.url)[0]);
+
+let cssInstalled = false;
+
+function installCss() {
+    if (cssInstalled)
+        return;
+    cssInstalled = true;
+
+    const display = Gdk.Display.get_default();
+    if (!display)
+        return;
+
+    const provider = new Gtk.CssProvider();
+    provider.load_from_string(`
+        .ai-chat-user {
+            background-color: @accent_bg_color;
+            color: @accent_fg_color;
+            border-radius: 14px;
+            padding: 8px 12px;
+        }
+        .ai-chat-assistant {
+            padding: 2px 0;
+        }
+        .ai-chat-reasoning {
+            font-style: italic;
+            font-size: 0.92em;
+        }
+        .ai-chat-status {
+            font-size: 0.9em;
+        }
+        .ai-chat-history-title {
+            font-weight: bold;
+        }
+    `);
+    Gtk.StyleContext.add_provider_for_display(
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
+function loadSettings() {
+    const schemaDir = GLib.build_filenamev([EXTENSION_DIR, 'schemas']);
+    const source = Gio.SettingsSchemaSource.new_from_directory(
+        schemaDir, Gio.SettingsSchemaSource.get_default(), false);
+    const schema = source?.lookup(SCHEMA_ID, false);
+    if (!schema)
+        throw new Error(`Settings schema ${SCHEMA_ID} not found in ${schemaDir}`);
+    return Gio.Settings.new_full(schema, null, null);
+}
+
+function parseArgs(args) {
+    let conversationId = null;
+    let history = false;
+
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--history') {
+            history = true;
+        } else if (args[i] === '--conversation') {
+            conversationId = args[i + 1] ?? null;
+            i += 1;
+        }
+    }
+
+    return {conversationId, history};
+}
+
+function isCancellationError(error) {
+    if (!error)
+        return false;
+    try {
+        if (error.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+            return true;
+    } catch {
+        // Not a GIO error
+    }
+    return error.name === 'AbortError' || /cancell/i.test(error.message ?? '');
+}
+
+function formatDate(ms) {
+    if (!ms)
+        return '';
+    return GLib.DateTime.new_from_unix_local(Math.floor(ms / 1000))
+        .format('%b %-e, %H:%M');
+}
+
+function previewOf(conversation) {
+    const last = conversation.messages.at(-1)?.content ?? '';
+    const compact = last.replace(/\s+/g, ' ').trim();
+    return compact.length > 120 ? `${compact.slice(0, 119)}…` : compact;
+}
+
+class ChatWindow {
+    constructor(app, settings, store) {
+        this._app = app;
+        this._settings = settings;
+        this._store = store;
+        this._client = new OpenAIClient();
+
+        this._conversation = null;
+        this._current = null;
+        this._cancellable = null;
+        this._modelWatch = null;
+        this._busy = false;
+        this._renderId = 0;
+        this._scrollId = 0;
+        this._copyId = 0;
+        this._emptyState = null;
+        this._settingsIds = [];
+
+        installCss();
+        this._buildUi();
+        this._installActions();
+
+        this._window.connect('close-request', () => {
+            this._shutdown();
+            return false;
+        });
+    }
+
+    get window() {
+        return this._window;
+    }
+
+    open({conversationId, history}) {
+        if (history)
+            this.showHistory();
+        else if (conversationId)
+            this.showConversation(conversationId);
+        else if (!this._conversation)
+            this.newChat();
+    }
+
+    // --- UI construction -----------------------------------------------------
+
+    _buildUi() {
+        this._window = new Adw.ApplicationWindow({
+            application: this._app,
+            title: 'AI Chat',
+            default_width: 760,
+            default_height: 820,
+        });
+
+        const toolbar = new Adw.ToolbarView();
+        this._window.set_content(toolbar);
+
+        const header = new Adw.HeaderBar();
+        toolbar.add_top_bar(header);
+
+        this._backButton = new Gtk.Button({
+            icon_name: 'go-previous-symbolic',
+            tooltip_text: 'Back to chat',
+            visible: false,
+        });
+        this._backButton.connect('clicked', () => this._showChat());
+        header.pack_start(this._backButton);
+
+        this._title = new Adw.WindowTitle({title: 'AI Chat', subtitle: ''});
+        header.set_title_widget(this._title);
+
+        const menuButton = new Gtk.MenuButton({
+            icon_name: 'open-menu-symbolic',
+            tooltip_text: 'Menu',
+        });
+        const menu = new Gio.Menu();
+        menu.append('Enable thinking', 'win.thinking');
+        menu.append('Show reasoning', 'win.show-reasoning');
+        menu.append('Preferences', 'win.preferences');
+        menuButton.set_menu_model(menu);
+        header.pack_end(menuButton);
+
+        const newButton = new Gtk.Button({
+            icon_name: 'document-new-symbolic',
+            tooltip_text: 'New chat',
+        });
+        newButton.connect('clicked', () => this.newChat());
+        header.pack_end(newButton);
+
+        const historyButton = new Gtk.Button({
+            icon_name: 'document-open-recent-symbolic',
+            tooltip_text: 'Chat history',
+        });
+        historyButton.connect('clicked', () => this.showHistory());
+        header.pack_end(historyButton);
+
+        this._stack = new Gtk.Stack({
+            transition_type: Gtk.StackTransitionType.CROSSFADE,
+            transition_duration: 120,
+        });
+        toolbar.set_content(this._stack);
+
+        this._buildChatPage();
+        this._buildHistoryPage();
+
+        // Escape returns from history, then closes the window.
+        const keys = new Gtk.EventControllerKey();
+        keys.connect('key-pressed', (_controller, keyval) => {
+            if (keyval !== Gdk.KEY_Escape)
+                return false;
+            if (this._stack.visible_child_name === 'history')
+                this._showChat();
+            else
+                this._window.close();
+            return true;
+        });
+        this._window.add_controller(keys);
+    }
+
+    _buildChatPage() {
+        const page = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL});
+
+        this._chatScroller = new Gtk.ScrolledWindow({
+            vexpand: true,
+            hexpand: true,
+        });
+        this._chatScroller.set_policy(
+            Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+
+        this._messagesBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+            margin_top: 18,
+            margin_bottom: 18,
+            margin_start: 18,
+            margin_end: 18,
+        });
+        this._chatScroller.set_child(this._messagesBox);
+        page.append(this._chatScroller);
+
+        const footer = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 8,
+            margin_start: 18,
+            margin_end: 18,
+            margin_bottom: 14,
+        });
+
+        const statusRow = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+        });
+        this._spinner = new Gtk.Spinner({
+            visible: false,
+            spinning: false,
+            valign: Gtk.Align.CENTER,
+        });
+        statusRow.append(this._spinner);
+
+        this._statusLabel = new Gtk.Label({
+            xalign: 0,
+            wrap: true,
+            visible: false,
+            hexpand: true,
+        });
+        this._statusLabel.add_css_class('ai-chat-status');
+        this._statusLabel.set_opacity(0.75);
+        statusRow.append(this._statusLabel);
+        footer.append(statusRow);
+
+        const composer = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+        });
+        this._entry = new Gtk.Entry({
+            hexpand: true,
+            placeholder_text: 'Ask a follow-up…',
+        });
+        this._entry.connect('activate', () => this._send());
+        composer.append(this._entry);
+
+        this._sendButton = new Gtk.Button({
+            icon_name: 'go-next-symbolic',
+            tooltip_text: 'Send',
+        });
+        this._sendButton.add_css_class('suggested-action');
+        this._sendButton.connect('clicked', () => this._send());
+        composer.append(this._sendButton);
+
+        footer.append(composer);
+        page.append(footer);
+
+        this._stack.add_named(page, 'chat');
+    }
+
+    _buildHistoryPage() {
+        const page = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL});
+        const scroller = new Gtk.ScrolledWindow({vexpand: true, hexpand: true});
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+
+        this._historyBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 6,
+            margin_top: 18,
+            margin_bottom: 18,
+            margin_start: 18,
+            margin_end: 18,
+        });
+        scroller.set_child(this._historyBox);
+        page.append(scroller);
+        this._stack.add_named(page, 'history');
+    }
+
+    // --- Menu actions --------------------------------------------------------
+
+    _installActions() {
+        this._addSwitchAction('thinking', 'enable-thinking');
+        this._addSwitchAction('show-reasoning', 'show-reasoning');
+
+        const preferences = new Gio.SimpleAction({name: 'preferences'});
+        preferences.connect('activate', () => {
+            try {
+                Gio.Subprocess.new(
+                    ['gnome-extensions', 'prefs', UUID],
+                    Gio.SubprocessFlags.NONE);
+            } catch (e) {
+                logError(e);
+            }
+        });
+        this._window.add_action(preferences);
+    }
+
+    _addSwitchAction(actionName, settingKey) {
+        const action = new Gio.SimpleAction({
+            name: actionName,
+            state: GLib.Variant.new_boolean(this._settings.get_boolean(settingKey)),
+        });
+        action.connect('activate', () => {
+            const next = !action.get_state().get_boolean();
+            action.set_state(GLib.Variant.new_boolean(next));
+            this._settings.set_boolean(settingKey, next);
+        });
+        const id = this._settings.connect(`changed::${settingKey}`, () => {
+            action.set_state(GLib.Variant.new_boolean(
+                this._settings.get_boolean(settingKey)));
+        });
+        this._settingsIds.push(id);
+        this._window.add_action(action);
+    }
+
+    // --- Conversation navigation --------------------------------------------
+
+    newChat() {
+        this._cancelRequest();
+        this._conversation = null;
+        this._clearTranscript();
+        this._showEmptyState();
+        this._setTitle('New chat');
+        this._setStatus('');
+        this._showChat();
+    }
+
+    showConversation(id) {
+        this._cancelRequest();
+        const conversation = id ? this._store.get(id) : null;
+        if (!conversation) {
+            this.newChat();
+            if (id)
+                this._setStatus('That chat is no longer saved.');
+            return;
+        }
+
+        this._conversation = conversation;
+        this._renderConversation();
+        this._setStatus('');
+        this._showChat();
+    }
+
+    showHistory() {
+        this._cancelRequest();
+        this._buildHistory();
+        this._stack.set_visible_child_name('history');
+        this._backButton.set_visible(true);
+    }
+
+    _showChat() {
+        this._stack.set_visible_child_name('chat');
+        this._backButton.set_visible(false);
+        if (!this._conversation && !this._messagesBox.get_first_child()) {
+            this._showEmptyState();
+            this._setTitle('New chat');
+        }
+        this._entry.grab_focus();
+    }
+
+    _renderConversation() {
+        this._clearTranscript();
+
+        const messages = this._conversation?.messages ?? [];
+        if (messages.length === 0) {
+            this._showEmptyState();
+            this._setTitle('New chat');
+            return;
+        }
+
+        for (const message of messages) {
+            if (message.role === 'user')
+                this._addUserMessage(message.content);
+            else
+                this._addStaticAssistantMessage(message.content);
+        }
+
+        const firstUser = messages.find(message => message.role === 'user');
+        this._setTitle(this._conversation.title ||
+            titleFor(firstUser?.content ?? ''));
+    }
+
+    _buildHistory() {
+        let child;
+        while ((child = this._historyBox.get_first_child()))
+            this._historyBox.remove(child);
+
+        const conversations = this._store.list();
+        if (conversations.length === 0) {
+            const empty = new Gtk.Label({
+                label: 'No saved chats yet. Ask something in the overview first.',
+                xalign: 0,
+                wrap: true,
+                margin_top: 24,
+            });
+            empty.add_css_class('dim-label');
+            this._historyBox.append(empty);
+            return;
+        }
+
+        const list = new Gtk.ListBox({
+            selection_mode: Gtk.SelectionMode.NONE,
+            activate_on_single_click: true,
+        });
+        list.add_css_class('boxed-list');
+        list.connect('row-activated', (_list, row) => {
+            if (row._conversationId)
+                this.showConversation(row._conversationId);
+        });
+
+        for (const conversation of conversations) {
+            const row = new Gtk.ListBoxRow({activatable: true});
+            row._conversationId = conversation.id;
+
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.VERTICAL,
+                spacing: 2,
+                margin_top: 10,
+                margin_bottom: 10,
+                margin_start: 12,
+                margin_end: 12,
+            });
+
+            const title = new Gtk.Label({
+                label: conversation.title,
+                xalign: 0,
+                wrap: false,
+                hexpand: true,
+                max_width_chars: 80,
+                ellipsize: Pango.EllipsizeMode.END,
+            });
+            title.add_css_class('ai-chat-history-title');
+            box.append(title);
+
+            const meta = new Gtk.Label({
+                label: `${formatDate(conversation.updated)}  ·  ${previewOf(conversation)}`,
+                xalign: 0,
+                hexpand: true,
+                max_width_chars: 80,
+                ellipsize: Pango.EllipsizeMode.END,
+            });
+            meta.add_css_class('dim-label');
+            box.append(meta);
+
+            row.set_child(box);
+            list.append(row);
+        }
+
+        this._historyBox.append(list);
+    }
+
+    // --- Transcript ----------------------------------------------------------
+
+    _clearTranscript() {
+        this._emptyState = null;
+        let child;
+        while ((child = this._messagesBox.get_first_child()))
+            this._messagesBox.remove(child);
+    }
+
+    _showEmptyState() {
+        if (this._emptyState)
+            return;
+        const label = new Gtk.Label({
+            label: 'Ask anything. Follow-up questions stay in this chat.',
+            xalign: 0,
+            wrap: true,
+            margin_top: 24,
+        });
+        label.add_css_class('dim-label');
+        this._messagesBox.append(label);
+        this._emptyState = label;
+    }
+
+    _removeEmptyState() {
+        if (!this._emptyState)
+            return;
+        this._messagesBox.remove(this._emptyState);
+        this._emptyState = null;
+    }
+
+    _addUserMessage(text) {
+        this._removeEmptyState();
+        const row = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            hexpand: true,
+        });
+        row.set_halign(Gtk.Align.END);
+        row.set_margin_top(4);
+
+        const label = new Gtk.Label({
+            label: text,
+            wrap: true,
+            selectable: true,
+            xalign: 0,
+            max_width_chars: 70,
+        });
+        label.add_css_class('ai-chat-user');
+        row.append(label);
+        this._messagesBox.append(row);
+        this._scrollToBottom();
+    }
+
+    _beginAssistantMessage() {
+        this._removeEmptyState();
+
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 6,
+            hexpand: true,
+        });
+
+        const reasoning = new Gtk.Label({
+            label: '',
+            wrap: true,
+            selectable: true,
+            xalign: 0,
+            visible: false,
+        });
+        reasoning.add_css_class('ai-chat-reasoning');
+        reasoning.set_opacity(0.7);
+        box.append(reasoning);
+
+        const content = new Gtk.Label({
+            label: '',
+            wrap: true,
+            selectable: true,
+            xalign: 0,
+            hexpand: true,
+        });
+        content.add_css_class('ai-chat-assistant');
+        box.append(content);
+
+        this._messagesBox.append(box);
+        this._current = {
+            box,
+            reasoning,
+            content,
+            answer: '',
+            reasoningText: '',
+            reasoningActive: false,
+            showReasoning: this._settings.get_boolean('show-reasoning'),
+            failed: false,
+        };
+        this._scrollToBottom();
+    }
+
+    _addStaticAssistantMessage(text) {
+        this._beginAssistantMessage();
+        this._current.answer = text;
+        this._renderCurrent();
+        this._finishAssistantMessage();
+    }
+
+    _finishAssistantMessage() {
+        const current = this._current;
+        if (!current)
+            return null;
+        this._current = null;
+        this._renderCurrent(current);
+
+        if (current.answer.trim()) {
+            const copy = new Gtk.Button({
+                icon_name: 'edit-copy-symbolic',
+                tooltip_text: 'Copy answer',
+                halign: Gtk.Align.START,
+            });
+            copy.add_css_class('flat');
+            copy.add_css_class('circular');
+            copy.connect('clicked', () => this._copy(current.answer));
+            current.box.append(copy);
+        }
+
+        return current.answer;
+    }
+
+    _failAssistantMessage(message) {
+        const current = this._current;
+        if (!current)
+            return;
+        current.failed = true;
+        current.reasoning.set_visible(false);
+        current.content.set_text(message);
+        current.content.add_css_class('error');
+        current.content.set_visible(true);
+        this._current = null;
+    }
+
+    _appendContent(text) {
+        if (!this._current)
+            this._beginAssistantMessage();
+        if (this._current.answer.length >= MAX_ANSWER_CHARS)
+            return;
+        const remaining = MAX_ANSWER_CHARS - this._current.answer.length;
+        this._current.answer += text.length > remaining ? text.slice(0, remaining) : text;
+        this._current.reasoningActive = false;
+        this._scheduleRender();
+    }
+
+    _appendNotice(text) {
+        if (!this._current)
+            this._beginAssistantMessage();
+        if (this._current.answer.length >= MAX_ANSWER_CHARS)
+            return;
+        this._current.answer += `${this._current.answer ? '\n\n' : ''}${text}`;
+        this._current.reasoningActive = false;
+        this._scheduleRender();
+    }
+
+    _appendReasoning(text) {
+        const current = this._current;
+        if (!current || !current.showReasoning)
+            return;
+        if (current.reasoningText.length >= MAX_REASONING_CHARS)
+            return;
+
+        if (!current.reasoningActive && current.reasoningText.trim())
+            current.reasoningText += '\n\n';
+        current.reasoningActive = true;
+        const remaining = MAX_REASONING_CHARS - current.reasoningText.length;
+        current.reasoningText += text.length > remaining ? text.slice(0, remaining) : text;
+        current.reasoning.set_visible(true);
+        this._scheduleRender();
+    }
+
+    _scheduleRender() {
+        if (this._renderId)
+            return;
+        this._renderId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, FLUSH_INTERVAL_MS, () => {
+                this._renderId = 0;
+                this._renderCurrent();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _renderCurrent(current = this._current) {
+        if (!current)
+            return;
+
+        const stick = this._isAtBottom();
+        if (current.reasoning.get_text() !== current.reasoningText)
+            current.reasoning.set_text(current.reasoningText);
+        if (current.content.get_text() !== current.answer)
+            current.content.set_text(current.answer);
+
+        if (stick)
+            this._scrollToBottom();
+    }
+
+    _isAtBottom() {
+        const adjustment = this._chatScroller.vadjustment;
+        if (!adjustment)
+            return true;
+        return adjustment.value + adjustment.page_size >= adjustment.upper - 64;
+    }
+
+    _scrollToBottom() {
+        if (this._scrollId)
+            return;
+        this._scrollId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._scrollId = 0;
+            const adjustment = this._chatScroller.vadjustment;
+            if (adjustment)
+                adjustment.value = Math.max(0, adjustment.upper - adjustment.page_size);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // --- Request lifecycle ---------------------------------------------------
+
+    async _send() {
+        if (this._busy)
+            return;
+
+        const text = this._entry.get_text().trim();
+        if (!text)
+            return;
+
+        this._entry.set_text('');
+        this._setStatus('');
+
+        if (!this._conversation)
+            this._conversation = this._store.create(text);
+
+        this._conversation.messages.push({role: 'user', content: text});
+        if (this._conversation.messages.length === 1) {
+            this._conversation.title = titleFor(text);
+            this._setTitle(this._conversation.title);
+        }
+        this._store.upsert(this._conversation);
+
+        this._addUserMessage(text);
+        this._beginAssistantMessage();
+        this._setBusy(true);
+        this._setStatus('Thinking…');
+
+        const cancellable = new Gio.Cancellable();
+        this._cancellable = cancellable;
+
+        try {
+            const baseUrl = normalizeEndpoint(this._settings.get_string('endpoint'));
+            const apiKey = this._settings.get_string('api-key').trim();
+            const configured = this._settings.get_string('model').trim();
+            const model = configured || await this._client.discoverModel({
+                baseUrl,
+                apiKey,
+                cancellable,
+            });
+            if (cancellable.is_cancelled())
+                return;
+
+            this._startModelWatch(baseUrl, apiKey, model, cancellable);
+
+            const messages = buildMessages(
+                this._settings.get_string('system-prompt'),
+                this._conversation.messages);
+
+            for await (const event of runChat({
+                client: this._client,
+                baseUrl,
+                apiKey,
+                model,
+                messages,
+                tools: this._settings.get_boolean('enable-tools')
+                    ? TOOL_DEFINITIONS
+                    : null,
+                enableThinking: this._settings.get_boolean('enable-thinking'),
+                maxToolRounds: this._settings.get_int('max-tool-rounds'),
+                cancellable,
+            })) {
+                if (cancellable.is_cancelled())
+                    return;
+
+                switch (event.type) {
+                case 'content':
+                    this._appendContent(event.text);
+                    this._stopModelWatch();
+                    this._setStatus('Responding…');
+                    break;
+                case 'reasoning':
+                    this._appendReasoning(event.text);
+                    this._setStatus('Thinking…');
+                    break;
+                case 'status':
+                    if (this._current)
+                        this._current.reasoningActive = false;
+                    this._setStatus(event.text);
+                    break;
+                case 'notice':
+                    this._appendNotice(event.text);
+                    break;
+                }
+            }
+
+            if (cancellable.is_cancelled())
+                return;
+
+            const answer = this._finishAssistantMessage();
+            if (answer?.trim()) {
+                this._conversation.messages.push({
+                    role: 'assistant',
+                    content: answer,
+                });
+                this._store.upsert(this._conversation);
+            }
+            this._setStatus('');
+        } catch (e) {
+            if (cancellable.is_cancelled() || isCancellationError(e))
+                return;
+            const message = e.message ?? String(e);
+            this._failAssistantMessage(message);
+            this._setStatus(`Error: ${message}`, true);
+        } finally {
+            if (this._cancellable === cancellable) {
+                this._cancellable = null;
+                this._stopModelWatch();
+                this._setBusy(false);
+            }
+        }
+    }
+
+    _cancelRequest() {
+        const cancellable = this._cancellable;
+        this._cancellable = null;
+        if (cancellable)
+            cancellable.cancel();
+        this._stopModelWatch();
+
+        if (this._current && !this._current.failed &&
+            this._current.answer.trim() && this._conversation) {
+            this._conversation.messages.push({
+                role: 'assistant',
+                content: this._current.answer,
+            });
+            this._store.upsert(this._conversation);
+        } else if (this._current && !this._current.failed &&
+            !this._current.answer.trim()) {
+            this._current.box.get_parent()?.remove(this._current.box);
+        }
+
+        this._current = null;
+        this._setBusy(false);
+    }
+
+    _startModelWatch(baseUrl, apiKey, model, cancellable) {
+        this._stopModelWatch();
+        if (!model)
+            return;
+
+        this._modelWatch = new ModelWatch({
+            client: this._client,
+            baseUrl,
+            apiKey,
+            model,
+            cancellable,
+            onUpdate: state => {
+                if (!this._busy || this._cancellable !== cancellable)
+                    return;
+                if (state.loading) {
+                    const text = formatModelState(state);
+                    if (text)
+                        this._setStatus(text);
+                } else if (this._statusLabel.get_text().startsWith('Loading model')) {
+                    this._setStatus('Thinking…');
+                }
+            },
+        });
+        this._modelWatch.start();
+    }
+
+    _stopModelWatch() {
+        if (this._modelWatch) {
+            this._modelWatch.stop();
+            this._modelWatch = null;
+        }
+    }
+
+    _setBusy(busy) {
+        this._busy = busy;
+        this._spinner.set_spinning(busy);
+        this._spinner.set_visible(busy);
+        this._sendButton.set_sensitive(!busy);
+        if (!busy && this._stack.visible_child_name === 'chat')
+            this._entry.grab_focus();
+    }
+
+    _setStatus(text, isError = false) {
+        const value = text ?? '';
+        if (this._statusLabel.get_text() !== value)
+            this._statusLabel.set_text(value);
+        this._statusLabel.set_visible(Boolean(value));
+        if (isError)
+            this._statusLabel.add_css_class('error');
+        else
+            this._statusLabel.remove_css_class('error');
+    }
+
+    _setTitle(subtitle) {
+        this._title.set_title('AI Chat');
+        const compact = String(subtitle ?? '').replace(/\s+/g, ' ').trim();
+        this._title.set_subtitle(
+            compact.length > 48 ? `${compact.slice(0, 47)}…` : compact);
+    }
+
+    _copy(text) {
+        const value = String(text ?? '').trim();
+        if (!value)
+            return;
+        Gdk.Display.get_default()?.get_clipboard().set(value);
+        this._setStatus('Copied to clipboard');
+        if (this._copyId)
+            GLib.source_remove(this._copyId);
+        this._copyId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+            this._copyId = 0;
+            if (!this._busy)
+                this._setStatus('');
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _shutdown() {
+        this._cancelRequest();
+        if (this._renderId) {
+            GLib.source_remove(this._renderId);
+            this._renderId = 0;
+        }
+        if (this._scrollId) {
+            GLib.source_remove(this._scrollId);
+            this._scrollId = 0;
+        }
+        if (this._copyId) {
+            GLib.source_remove(this._copyId);
+            this._copyId = 0;
+        }
+        for (const id of this._settingsIds)
+            this._settings.disconnect(id);
+        this._settingsIds = [];
+        this._client.destroy();
+        this._store.destroy();
+    }
+}
+
+function main() {
+    const settings = loadSettings();
+    const store = new ChatStore();
+    let window = null;
+
+    const app = new Adw.Application({
+        application_id: APP_ID,
+        flags: Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
+    });
+
+    app.connect('command-line', (application, commandLine) => {
+        if (!window)
+            window = new ChatWindow(application, settings, store);
+        window.open(parseArgs(commandLine.get_arguments().slice(1)));
+        window.window.present();
+        commandLine.set_exit_status(0);
+        return 0;
+    });
+
+    app.run([GLib.get_prgname(), ...ARGV]);
+}
+
+main();

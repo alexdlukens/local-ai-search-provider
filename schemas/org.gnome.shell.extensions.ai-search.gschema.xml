@@ -22,7 +22,7 @@
     </key>
 
     <key name="system-prompt" type="s">
-      <default>'You are an AI assistant embedded in the GNOME Shell overview search. Answer in plain text, concisely, because the answer is displayed in a narrow search result. Avoid Markdown tables and long code blocks. Use the available tools when they help.'</default>
+      <default>'You are a helpful AI assistant embedded in GNOME Shell. Answer in plain text and be concise. Avoid Markdown tables and long code blocks. Use the available tools when they help.'</default>
       <summary>System prompt</summary>
       <description>Instruction prepended to every query.</description>
     </key>
@@ -34,10 +34,16 @@
       <description>Milliseconds to wait after the last keystroke before sending a request.</description>
     </key>
 
+    <key name="enable-thinking" type="b">
+      <default>true</default>
+      <summary>Enable thinking</summary>
+      <description>Let reasoning-capable models think before answering. Turn off to skip reasoning entirely and answer faster. Servers or models without thinking support ignore this.</description>
+    </key>
+
     <key name="show-reasoning" type="b">
       <default>false</default>
       <summary>Show reasoning</summary>
-      <description>Stream the model's reasoning/thinking content above the answer.</description>
+      <description>Display the model's reasoning/thinking content above the answer. Requires thinking to be enabled and a model that streams reasoning.</description>
     </key>
 
     <key name="enable-tools" type="b">
