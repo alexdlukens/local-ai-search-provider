@@ -153,8 +153,17 @@ from the **AI Chats** app.
 - Type a follow-up in the composer and press `Enter` (or the send button).
 - Earlier turns are sent with each follow-up, so the model sees the
   conversation.
+- Each question you send is stamped with the date and time it was asked, shown
+  small and dim above the message. The time is saved with the chat, so it is
+  the same when you reopen the conversation.
 - The history button opens saved conversations. Select one to reopen and
   continue it.
+- Each history row has a trash button that deletes that conversation
+  immediately, without opening it. Deleting the open chat resets the window to
+  a new empty chat.
+- **Clear All**, at the right of the history heading, deletes every saved chat
+  after you confirm. It is insensitive when nothing is saved; after the last
+  chat is gone the page shows the empty-state message.
 - The new-chat button starts an empty conversation.
 - The back button returns from history to the current chat.
 - Use the copy button under an answer to copy its Markdown.
@@ -264,7 +273,8 @@ gsettings --schemadir ~/.local/share/gnome-shell/extensions/ai-search@alexdluken
   reset-recursively org.gnome.shell.extensions.ai-search
 ```
 
-To delete chat history:
+To delete chat history, use the trash button on a history row, or **Clear
+All** in the chat window. To remove the whole file by hand instead:
 
 ```sh
 rm ~/.local/share/ai-search/chats.json

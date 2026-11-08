@@ -206,12 +206,19 @@ MCP tool output is converted to text and truncated to the same
 `~/.local/share/ai-search/chats.json`).
 
 - Format: `{version: 1, conversations: [...]}`.
+- User messages may carry `ts` (epoch milliseconds), used to show when each
+  query was asked when the chat is reopened. Messages without it still load and
+  simply show no time.
 - Unreadable or malformed entries are dropped rather than crashing the shell.
 - Writes create the parent directory with mode `0700`, write a `.tmp` file, then
   atomically move it over the real file.
 - A `Gio.FileMonitor` invalidates the in-memory cache when the other process
   writes, so the overview and chat window see each other's changes.
 - At most 100 conversations are kept, sorted by `updated`.
+- `clear()` empties the list and rewrites the file as
+  `{version: 1, conversations: []}`; `remove(id)` drops a single conversation.
+  The chat window's history page uses them for **Clear All** and the per-row
+  trash button.
 
 Assistant messages may also store a `metrics` object from `lib/metrics.js`, so
 reopening a saved chat shows the same per-turn values. Tool calls, tool

@@ -32,7 +32,9 @@ MCP servers are opt-in and contacted only when enabled.
 - Streaming answers inside the overview, with a configurable typing debounce.
 - Markdown rendering in both the result row and the chat window: headings,
   emphasis, code blocks, lists, blockquotes, rules, and pipe tables.
-- Follow-up conversations in a dedicated GTK chat window with saved history.
+- Follow-up conversations in a dedicated GTK chat window with saved history and
+  a timestamp on each question; delete one chat from its history row or clear
+  all of them after a confirmation.
 - Model loading status, including a percentage when the server exposes
   `/v1/load-progress`.
 - Works with local servers that implement the OpenAI chat-completions API:

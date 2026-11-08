@@ -66,6 +66,13 @@ function installCss() {
         .ai-chat-history-title {
             font-weight: bold;
         }
+        .ai-chat-history-heading {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .ai-chat-timestamp {
+            font-size: 0.8em;
+        }
         .ai-chat-code {
             background-color: @card_bg_color;
             border-radius: 8px;
@@ -368,6 +375,33 @@ class ChatWindow {
 
     _buildHistoryPage() {
         const page = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL});
+
+        const header = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 12,
+            margin_top: 18,
+            margin_start: 18,
+            margin_end: 18,
+        });
+        const heading = new Gtk.Label({
+            label: 'Chat history',
+            xalign: 0,
+            hexpand: true,
+        });
+        heading.add_css_class('ai-chat-history-heading');
+        header.append(heading);
+
+        this._clearAllButton = new Gtk.Button({
+            label: 'Clear All',
+            tooltip_text: 'Delete all saved chats',
+            valign: Gtk.Align.CENTER,
+        });
+        this._clearAllButton.add_css_class('flat');
+        this._clearAllButton.connect('clicked', () => this._confirmClearAll());
+        header.append(this._clearAllButton);
+
+        page.append(header);
+
         const scroller = new Gtk.ScrolledWindow({vexpand: true, hexpand: true});
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
 
@@ -425,12 +459,55 @@ class ChatWindow {
 
     newChat() {
         this._cancelRequest();
+        this._resetChat();
+        this._showChat();
+    }
+
+    _resetChat() {
         this._conversation = null;
         this._clearTranscript();
         this._showEmptyState();
         this._setTitle('New chat');
         this._setStatus('');
-        this._showChat();
+    }
+
+    _deleteConversation(id) {
+        const isCurrent = this._conversation?.id === id;
+        // Cancel before removing: cancellation can save a partial answer.
+        if (isCurrent)
+            this._cancelRequest();
+        this._store.remove(id);
+        if (isCurrent)
+            this._resetChat();
+        this._buildHistory();
+    }
+
+    _confirmClearAll() {
+        const count = this._store.list().length;
+        if (count === 0)
+            return;
+
+        const plural = count === 1 ? '' : 's';
+        const dialog = new Adw.AlertDialog({
+            heading: 'Delete all chats?',
+            body: `This deletes all ${count} saved conversation${plural}. This cannot be undone.`,
+        });
+        dialog.add_response('cancel', 'Cancel');
+        dialog.add_response('delete', 'Delete All');
+        dialog.set_response_appearance(
+            'delete', Adw.ResponseAppearance.DESTRUCTIVE);
+        dialog.set_default_response('cancel');
+        dialog.set_close_response('cancel');
+        dialog.connect('response', (_dialog, response) => {
+            if (response !== 'delete')
+                return;
+            // Cancel before clearing: cancellation can save a partial answer.
+            this._cancelRequest();
+            this._store.clear();
+            this._resetChat();
+            this._buildHistory();
+        });
+        dialog.present(this._window);
     }
 
     showConversation(id) {
@@ -478,7 +555,7 @@ class ChatWindow {
 
         for (const message of messages) {
             if (message.role === 'user')
-                this._addUserMessage(message.content);
+                this._addUserMessage(message.content, message.ts);
             else
                 this._addStaticAssistantMessage(message.content, message.metrics ?? null);
         }
@@ -494,6 +571,7 @@ class ChatWindow {
             this._historyBox.remove(child);
 
         const conversations = this._store.list();
+        this._clearAllButton.set_sensitive(conversations.length > 0);
         if (conversations.length === 0) {
             const empty = new Gtk.Label({
                 label: 'No saved chats yet. Ask something in the overview first.',
@@ -512,7 +590,7 @@ class ChatWindow {
         });
         list.add_css_class('boxed-list');
         list.connect('row-activated', (_list, row) => {
-            if (row._conversationId)
+            if (row._conversationId && this._store.get(row._conversationId))
                 this.showConversation(row._conversationId);
         });
 
@@ -520,13 +598,19 @@ class ChatWindow {
             const row = new Gtk.ListBoxRow({activatable: true});
             row._conversationId = conversation.id;
 
-            const box = new Gtk.Box({
-                orientation: Gtk.Orientation.VERTICAL,
-                spacing: 2,
+            const content = new Gtk.Box({
+                orientation: Gtk.Orientation.HORIZONTAL,
+                spacing: 8,
                 margin_top: 10,
                 margin_bottom: 10,
                 margin_start: 12,
                 margin_end: 12,
+            });
+
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.VERTICAL,
+                spacing: 2,
+                hexpand: true,
             });
 
             const title = new Gtk.Label({
@@ -550,7 +634,21 @@ class ChatWindow {
             meta.add_css_class('dim-label');
             box.append(meta);
 
-            row.set_child(box);
+            content.append(box);
+
+            // GtkListBox handles row clicks with a BUBBLE-phase gesture, so a
+            // button that claims the press prevents row activation entirely.
+            const deleteButton = new Gtk.Button({
+                icon_name: 'user-trash-symbolic',
+                tooltip_text: 'Delete this chat',
+                valign: Gtk.Align.CENTER,
+            });
+            deleteButton.add_css_class('flat');
+            deleteButton.connect('clicked', () =>
+                this._deleteConversation(conversation.id));
+            content.append(deleteButton);
+
+            row.set_child(content);
             list.append(row);
         }
 
@@ -587,14 +685,32 @@ class ChatWindow {
         this._emptyState = null;
     }
 
-    _addUserMessage(text) {
+    _addUserMessage(text, ts) {
         this._removeEmptyState();
+
+        const wrapper = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 2,
+            hexpand: true,
+        });
+        wrapper.set_halign(Gtk.Align.END);
+        wrapper.set_margin_top(4);
+
+        if (ts) {
+            const stamp = new Gtk.Label({
+                label: formatDate(ts),
+                xalign: 1,
+            });
+            stamp.add_css_class('ai-chat-timestamp');
+            stamp.add_css_class('dim-label');
+            wrapper.append(stamp);
+        }
+
         const row = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
             hexpand: true,
         });
         row.set_halign(Gtk.Align.END);
-        row.set_margin_top(4);
 
         const label = new Gtk.Label({
             label: text,
@@ -605,7 +721,8 @@ class ChatWindow {
         });
         label.add_css_class('ai-chat-user');
         row.append(label);
-        this._messagesBox.append(row);
+        wrapper.append(row);
+        this._messagesBox.append(wrapper);
         this._scrollToBottom();
     }
 
@@ -1043,14 +1160,15 @@ class ChatWindow {
         if (!this._conversation)
             this._conversation = this._store.create(text);
 
-        this._conversation.messages.push({role: 'user', content: text});
+        const ts = Date.now();
+        this._conversation.messages.push({role: 'user', content: text, ts});
         if (this._conversation.messages.length === 1) {
             this._conversation.title = titleFor(text);
             this._setTitle(this._conversation.title);
         }
         this._store.upsert(this._conversation);
 
-        this._addUserMessage(text);
+        this._addUserMessage(text, ts);
         await this._respond();
     }
 

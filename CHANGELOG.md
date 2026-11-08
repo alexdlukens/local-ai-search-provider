@@ -24,6 +24,13 @@ All notable changes to this project are documented here. The format follows
   usage. Generated token counts fall back to estimates when the server
   reports none. Metrics are saved with chat history and reappear when a chat
   is reopened.
+- Deleting a single saved chat from its history row without opening it, and
+  clearing every saved chat with the **Clear All** button after confirming in
+  a dialog. Deleting the open chat resets the window to a new empty chat, and
+  **Clear All** is insensitive when nothing is saved.
+- A date and time stamp on every user question in the chat window, saved in
+  `chats.json` as `ts` (epoch milliseconds) so reopened chats show the original
+  times. Chats saved before this change show no timestamp.
 
 ### Changed
 

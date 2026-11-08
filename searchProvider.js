@@ -461,7 +461,7 @@ export class AiSearchProvider {
                 title: titleFor(query),
                 created: Date.now(),
                 updated: Date.now(),
-                messages: [{role: 'user', content: query}],
+                messages: [{role: 'user', content: query, ts: Date.now()}],
             }
             : null;
         this._render();
