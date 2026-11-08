@@ -139,7 +139,8 @@ The complete settings reference is in the
    pressing `Escape`. The same applies to the **AI chat history** row. You do
    not have to wait for the answer to start: if the question is still waiting
    on the debounce or the model, the chat window asks it and streams the reply
-   there.
+   there. The **AI chat history** row shows how many conversations were active
+   today; opening it lists every saved chat, not just today's.
 
 While a request is in flight, typing a new query cancels the old one. The
 overview row only shows the final answer and its metrics; reasoning and tool

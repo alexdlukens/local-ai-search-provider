@@ -53,6 +53,9 @@ All notable changes to this project are documented here. The format follows
   overview, opening the app grid, launching another result, or clearing the
   query — now cancels the in-flight answer. The partial reply is discarded and
   is not written to chat history.
+- The **AI chat history** row in the overview now shows how many chats were
+  active today (for example **5 chats today**) instead of the total number of
+  saved chats. An empty history still says **No saved chats yet**.
 
 ### Removed
 

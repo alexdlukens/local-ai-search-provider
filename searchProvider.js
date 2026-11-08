@@ -136,6 +136,13 @@ function isCancellationError(error) {
     return error.name === 'AbortError' || /cancell/i.test(error.message ?? '');
 }
 
+function startOfToday() {
+    const now = GLib.DateTime.new_now_local();
+    return GLib.DateTime.new_local(
+        now.get_year(), now.get_month(), now.get_day_of_month(),
+        0, 0, 0).to_unix() * 1000;
+}
+
 function trimForDisplay(value, limit) {
     if (value.length <= limit)
         return value;
@@ -222,15 +229,20 @@ export class AiSearchProvider {
     }
 
     async getResultMetas(ids, _cancellable) {
-        const chatCount = this._store?.list().length ?? 0;
+        const conversations = this._store?.list() ?? [];
+        const since = startOfToday();
+        const todayCount = conversations.filter(
+            conversation => conversation.updated >= since).length;
+        const description = conversations.length === 0
+            ? 'No saved chats yet'
+            : (todayCount === 1 ? '1 chat today' : `${todayCount} chats today`);
+
         return ids.map(id => {
             if (id === HISTORY_RESULT_ID) {
                 return {
                     id,
                     name: 'AI chat history',
-                    description: chatCount === 0
-                        ? 'No saved chats yet'
-                        : (chatCount === 1 ? '1 saved chat' : `${chatCount} saved chats`),
+                    description,
                     createIcon: size => new St.Icon({
                         icon_name: 'document-open-recent-symbolic',
                         icon_size: size,
