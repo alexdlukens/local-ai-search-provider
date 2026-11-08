@@ -8,12 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- A built-in `get_location` tool reporting an approximate current location:
-  city, region, country, coordinates, and timezone, inferred from the public IP
-  address through a keyless HTTPS lookup at ipapi.co. Accuracy is city-level,
-  not GPS, and the raw IP is never returned to the model. It is gated by
-  **Enable web data tools**, and the provider sees the user's public IP when
-  the tool runs.
+- A built-in `get_location` tool reporting the current location from the
+  desktop's location service (GeoClue2 over the system D-Bus): latitude,
+  longitude, accuracy, place description, and fix time. It sends no request to
+  a third-party IP-geolocation service. It is gated by **Enable tools** and
+  requires Location Services to be enabled; the desktop may prompt for
+  permission, and the tool reports an actionable error when the service is
+  unavailable, denied, or times out.
 - Built-in `web_search` and `fetch_url` tools. `web_search` queries
   DuckDuckGo's HTML endpoint and returns titles, URLs, and snippets;
   `fetch_url` returns the readable text of one public web page. Both are

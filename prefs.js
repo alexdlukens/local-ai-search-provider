@@ -573,14 +573,15 @@ export default class AiSearchPreferences extends ExtensionPreferences {
         const toolsGroup = new Adw.PreferencesGroup({
             title: 'Tools',
             description: 'Read-only tools return data inline: get_datetime, ' +
-                'get_system_info, get_weather, get_country_info, ' +
+                'get_system_info, get_location, get_weather, get_country_info, ' +
                 'search_wikipedia, and convert_currency.',
         });
         page.add(toolsGroup);
 
         const toolsRow = new Adw.SwitchRow({
             title: 'Enable tool calling',
-            subtitle: 'Let the model call the tools above via function calling.',
+            subtitle: 'Let the model call the tools above via function calling, ' +
+                'including the system location service (may ask for permission).',
         });
         settings.bind('enable-tools', toolsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
@@ -589,8 +590,8 @@ export default class AiSearchPreferences extends ExtensionPreferences {
         const webToolsRow = new Adw.SwitchRow({
             title: 'Enable web data tools',
             subtitle: 'Weather, country and population lookups, Wikipedia and ' +
-                'web search, page reading, currency conversion, and approximate ' +
-                'location. Results come back inline; nothing opens a browser.',
+                'web search, page reading, and currency conversion. Results come ' +
+                'back inline; nothing opens a browser.',
         });
         settings.bind('enable-web-tools', webToolsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);

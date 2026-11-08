@@ -39,9 +39,11 @@ window is a separate GJS process with the same user permissions.
   network exposure.
 - Basic system information exposed by the built-in `get_system_info` tool: OS,
   hostname, username, GNOME version, session type, CPU, memory, and uptime.
-- An approximate city-level location derived from your public IP address by the
-  built-in `get_location` tool. It is not GPS and is only as precise as the IP
-  geolocation database.
+- Your current location through the built-in `get_location` tool, which asks
+  the desktop's GeoClue2 location service over the system D-Bus. The service
+  obeys the desktop Location Services setting and its authorization agent, so
+  the position is only returned when location access is enabled and allowed.
+  The fix may come from GPS, Wi-Fi, or a coarse network source.
 - The network endpoints you configure: the model server, MCP servers, and the
   built-in web tool providers.
 
@@ -54,8 +56,11 @@ Model output is untrusted input:
   model cannot launch installed desktop applications.
 - It can cause requests to the built-in web providers with model-chosen
   locations, country names, search terms, currency pairs, or public URLs.
-- It can call `get_location`, which contacts an IP-geolocation provider
-  (`ipapi.co`); that provider learns your public IP address when the tool runs.
+- It can call `get_location`, which asks the system GeoClue2 service over
+  D-Bus. The tool returns coordinates, accuracy, a description, and the fix
+  time to the model. The request is subject to the same Location Services
+  setting, permission dialog, and agent authorization as any other desktop
+  app; the extension cannot bypass them.
 - `fetch_url` accepts arbitrary `http(s)` URLs but refuses loopback, private,
   link-local, multicast, and reserved addresses. It checks both literal
   addresses and every address returned by the system resolver, re-validating

@@ -169,11 +169,11 @@ arrives. The context window is discovered best-effort from llama.cpp `/props`
 
 Tool definitions come from `lib/toolRegistry.js`:
 
-- Always: `get_datetime`, `get_system_info`.
+- Always: `get_datetime`, `get_system_info`, `get_location` (`get_location`
+  queries the desktop's GeoClue2 location service over the system D-Bus and
+  requires Location Services to be enabled and permission to be granted).
 - With web tools: `get_weather`, `get_country_info`, `search_wikipedia`,
-  `web_search`, `fetch_url`, `convert_currency`, `get_location`
-  (`get_location` resolves an approximate city-level position from the public
-  IP address).
+  `web_search`, `fetch_url`, `convert_currency`.
 - With MCP enabled: discovered tools renamed to
   `mcp__<sanitized-server>__<sanitized-tool>`, with duplicate names suffixed.
 
@@ -182,7 +182,9 @@ cannot launch desktop applications and GNOME Shell's application search is not
 intercepted. `web_search` reads DuckDuckGo's HTML results; `fetch_url` performs
 one guarded HTTP GET, rejects loopback/private/link-local/reserved addresses
 (including resolved DNS answers and every redirect hop), caps the body at
-2 MiB, and returns text only. Neither tool spawns processes or evaluates code.
+2 MiB, and returns text only. `get_location` talks only to the local GeoClue2
+service on the system D-Bus and performs no network lookup of its own. Neither
+tool spawns processes or evaluates code.
 
 ## MCP client
 

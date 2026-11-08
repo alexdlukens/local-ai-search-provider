@@ -188,18 +188,18 @@ invoke them directly.
 | --- | --- | --- |
 | `get_datetime` | **Enable tools** | Local date, time, timezone. |
 | `get_system_info` | **Enable tools** | OS, hostname, user, GNOME version, session, CPU, memory, uptime. |
+| `get_location` | **Enable tools** | Current position from the system location service (GeoClue2, over D-Bus): coordinates, accuracy, description, and fix time. Location Services must be enabled in Settings → Privacy. May prompt for permission; precision varies with the available source. |
 | `get_weather` | **Enable web data tools** | Open-Meteo; current conditions plus 1–5 forecast days. |
 | `get_country_info` | **Enable web data tools** | World Bank population and metadata plus a Wikipedia summary. |
 | `search_wikipedia` | **Enable web data tools** | Search results with summaries and links. |
 | `web_search` | **Enable web data tools** | DuckDuckGo results: title, URL, and snippet. |
 | `fetch_url` | **Enable web data tools** | Readable text of one public http(s) URL. |
 | `convert_currency` | **Enable web data tools** | Frankfurter reference rates. |
-| `get_location` | **Enable web data tools** | Approximate city-level location, coordinates, and timezone from your public IP (ipapi.co); not GPS. |
 
-All built-in tools are read-only: they read local information or query web
-providers. The former `open_application` tool was removed, so the model cannot
-launch desktop applications and GNOME Shell's own application search is not
-intercepted.
+All built-in tools are read-only: they read local information and desktop
+services, or query web providers. The former `open_application` tool was
+removed, so the model cannot launch desktop applications and GNOME Shell's own
+application search is not intercepted.
 
 `fetch_url` only accepts `http` and `https`. Loopback, private, link-local,
 multicast, and reserved addresses are refused, including when a DNS name
