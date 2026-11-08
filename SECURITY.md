@@ -39,6 +39,9 @@ window is a separate GJS process with the same user permissions.
   network exposure.
 - Basic system information exposed by the built-in `get_system_info` tool: OS,
   hostname, username, GNOME version, session type, CPU, memory, and uptime.
+- An approximate city-level location derived from your public IP address by the
+  built-in `get_location` tool. It is not GPS and is only as precise as the IP
+  geolocation database.
 - The network endpoints you configure: the model server, MCP servers, and the
   built-in web tool providers.
 
@@ -51,6 +54,8 @@ Model output is untrusted input:
   model cannot launch installed desktop applications.
 - It can cause requests to the built-in web providers with model-chosen
   locations, country names, search terms, currency pairs, or public URLs.
+- It can call `get_location`, which contacts an IP-geolocation provider
+  (`ipapi.co`); that provider learns your public IP address when the tool runs.
 - `fetch_url` accepts arbitrary `http(s)` URLs but refuses loopback, private,
   link-local, multicast, and reserved addresses. It checks both literal
   addresses and every address returned by the system resolver, re-validating

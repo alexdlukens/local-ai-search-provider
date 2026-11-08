@@ -55,7 +55,7 @@
     <key name="enable-web-tools" type="b">
       <default>true</default>
       <summary>Enable web data tools</summary>
-      <description>Weather, country and population lookups, Wikipedia and web search, page reading, and currency conversion. Results are returned inline in the answer and chat.</description>
+      <description>Weather, country and population lookups, Wikipedia and web search, page reading, currency conversion, and approximate location. Results are returned inline in the answer and chat.</description>
     </key>
 
     <key name="enable-mcp" type="b">

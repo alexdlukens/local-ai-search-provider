@@ -171,7 +171,9 @@ Tool definitions come from `lib/toolRegistry.js`:
 
 - Always: `get_datetime`, `get_system_info`.
 - With web tools: `get_weather`, `get_country_info`, `search_wikipedia`,
-  `web_search`, `fetch_url`, `convert_currency`.
+  `web_search`, `fetch_url`, `convert_currency`, `get_location`
+  (`get_location` resolves an approximate city-level position from the public
+  IP address).
 - With MCP enabled: discovered tools renamed to
   `mcp__<sanitized-server>__<sanitized-tool>`, with duplicate names suffixed.
 

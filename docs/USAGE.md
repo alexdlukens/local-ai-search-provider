@@ -194,6 +194,7 @@ invoke them directly.
 | `web_search` | **Enable web data tools** | DuckDuckGo results: title, URL, and snippet. |
 | `fetch_url` | **Enable web data tools** | Readable text of one public http(s) URL. |
 | `convert_currency` | **Enable web data tools** | Frankfurter reference rates. |
+| `get_location` | **Enable web data tools** | Approximate city-level location, coordinates, and timezone from your public IP (ipapi.co); not GPS. |
 
 All built-in tools are read-only: they read local information or query web
 providers. The former `open_application` tool was removed, so the model cannot

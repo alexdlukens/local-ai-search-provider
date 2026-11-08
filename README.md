@@ -40,8 +40,8 @@ MCP servers are opt-in and contacted only when enabled.
 - Works with local servers that implement the OpenAI chat-completions API:
   Unsloth Studio, llama.cpp's `llama-server`, Ollama, and LM Studio.
 - Built-in tools for date/time, system information, weather,
-  country/population data, Wikipedia, currency conversion, web search, and
-  reading a specific web page.
+  country/population data, Wikipedia, currency conversion, web search,
+  approximate location from the public IP, and reading a specific web page.
 - Live per-turn metrics under the answer and in the chat window: time to first
   token, prompt processing and generation speed, and token/context usage.
 - Optional [Model Context Protocol](https://modelcontextprotocol.io/) (MCP)
@@ -142,7 +142,7 @@ gnome-extensions prefs ai-search@alexdlukens.github.io
 | Enable thinking | on | Sends `enable_thinking: false` / `reasoning_effort: none` when disabled. Servers without thinking support ignore it. |
 | Show reasoning | off | Displays `reasoning_content` in the result row and chat window. Requires thinking. |
 | Enable tools | on | Lets the model call tools through function calling. |
-| Enable web data tools | on | Weather, country/population, Wikipedia, currency, web search, and page-fetch tools. Results return inline; no browser opens. |
+| Enable web data tools | on | Weather, country/population, Wikipedia, currency, approximate location, web search, and page-fetch tools. Results return inline; no browser opens. |
 | Enable MCP tools | off | Discovers tools from the configured MCP servers. |
 | Maximum tool rounds | 3 | Caps tool-call/answer loops per query. |
 
@@ -164,6 +164,7 @@ client-side and results are returned inline in the answer and chat window.
 | `web_search` | DuckDuckGo result titles, URLs, and snippets for arbitrary queries. |
 | `fetch_url` | Readable text of one public http(s) page; HTML tags are stripped. |
 | `convert_currency` | Reference exchange rates from Frankfurter. |
+| `get_location` | Approximate city-level location from the public IP via ipapi.co. |
 
 The built-in tools are read-only: they read local information or query web
 providers. The former `open_application` tool was removed, so the model cannot

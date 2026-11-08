@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A built-in `get_location` tool reporting an approximate current location:
+  city, region, country, coordinates, and timezone, inferred from the public IP
+  address through a keyless HTTPS lookup at ipapi.co. Accuracy is city-level,
+  not GPS, and the raw IP is never returned to the model. It is gated by
+  **Enable web data tools**, and the provider sees the user's public IP when
+  the tool runs.
 - Built-in `web_search` and `fetch_url` tools. `web_search` queries
   DuckDuckGo's HTML endpoint and returns titles, URLs, and snippets;
   `fetch_url` returns the readable text of one public web page. Both are

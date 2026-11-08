@@ -589,8 +589,8 @@ export default class AiSearchPreferences extends ExtensionPreferences {
         const webToolsRow = new Adw.SwitchRow({
             title: 'Enable web data tools',
             subtitle: 'Weather, country and population lookups, Wikipedia and ' +
-                'web search, page reading, and currency conversion. Results ' +
-                'come back inline; nothing opens a browser.',
+                'web search, page reading, currency conversion, and approximate ' +
+                'location. Results come back inline; nothing opens a browser.',
         });
         settings.bind('enable-web-tools', webToolsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
