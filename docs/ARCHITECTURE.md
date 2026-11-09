@@ -1,6 +1,6 @@
 # Architecture
 
-AI Search is a GNOME Shell 50/51 extension plus a separately launched GTK chat
+AI Search is a GNOME Shell extension plus a separately launched GTK chat
 window. Both processes share the same plain-JS modules under `lib/`. There is no
 build step and no external JavaScript dependency.
 
@@ -290,4 +290,4 @@ platform libraries already present on a GNOME Shell system.
   counts and speeds are estimates, and a context percentage needs a context
   size from `/props` or `/models`.
 - GNOME Shell's search-provider API is not stable across major releases. The
-  extension targets the Shell 50+ `addProvider()` API.
+  extension targets the current `addProvider()` API.

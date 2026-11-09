@@ -29,7 +29,7 @@ metrics and the AI chat history row](docs/images/search_provider.png)
 
 ## Requirements
 
-- GNOME Shell 50 or 51 on Wayland. Older releases are not supported.
+- GNOME Shell on Wayland. Older releases are not supported.
 - A reachable server implementing the OpenAI chat-completions API. **No model
   is included with this extension**: install a server and download a model
   yourself.

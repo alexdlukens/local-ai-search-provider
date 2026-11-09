@@ -9,8 +9,8 @@ careful review and reproducible bug reports are especially valuable.
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Security issues must follow [SECURITY.md](SECURITY.md), not the public issue
   tracker.
-- The extension targets **GNOME Shell 50** only. Changes that depend on older or
-  newer Shell APIs need a compatibility plan.
+- The extension targets **GNOME Shell** generally. Changes that depend on
+  version-specific Shell APIs need a compatibility plan.
 
 ## Development setup
 
@@ -37,7 +37,7 @@ On Wayland, log out and back in after reinstalling. A nested Shell session is
 also useful for iterating without touching your main session.
 
 There is no npm/yarn/pip dependency. Everything runs on the GJS/GNOME platform
-libraries already present on a GNOME Shell 50 system.
+libraries already present on a GNOME Shell system.
 
 ## Repository layout
 

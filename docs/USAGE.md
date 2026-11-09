@@ -241,7 +241,7 @@ file.
 
 ### The AI section never appears
 
-- Confirm GNOME Shell 50 or 51 with `gnome-shell --version`.
+- Confirm your GNOME Shell version with `gnome-shell --version`.
 - Check `gnome-extensions info ai-search@alexdlukens.github.io`, enable the
   extension, and log out and back in.
 - Check the log: `journalctl -b -o cat /usr/bin/gnome-shell | grep -i ai-search`.

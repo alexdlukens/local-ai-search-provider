@@ -21,7 +21,7 @@ acknowledged and fixed as soon as practical.
 ## Supported versions
 
 Security fixes target the current `main` branch and the latest release. The
-extension supports GNOME Shell 50 only; older Shell releases are not supported.
+extension supports GNOME Shell; older Shell releases are not supported.
 
 ## Threat model
 
