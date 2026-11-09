@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A dedicated icon for the **AI Chats** application. `make install` now
+  installs the scalable SVG and 16–512 px PNG sizes into the user's hicolor
+  icon theme, and the desktop entry uses it instead of a generic symbolic
+  icon. `make icons` regenerates the committed PNGs from `data/ai-search.svg`.
 - Opening the overview search now starts loading a cold model immediately,
   without waiting for the typing debounce. The warm-up is skipped when the
   server reports the model as already loaded.

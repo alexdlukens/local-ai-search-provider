@@ -49,7 +49,7 @@ libraries already present on a GNOME Shell 50 system.
 | `prefs.js` | Adwaita preferences and server/tool validation. |
 | `lib/` | Shared client, chat loop, tools, MCP, Markdown, storage. |
 | `schemas/` | GSettings schema. |
-| `data/` | AI Chats desktop entry template. |
+| `data/` | AI Chats desktop entry template, source SVG, and installed icon sizes. |
 | `docs/` | Usage, architecture, and publishing notes. |
 
 ## Code style
