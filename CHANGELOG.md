@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Opening the overview search now starts loading a cold model immediately,
+  without waiting for the typing debounce. The warm-up is skipped when the
+  server reports the model as already loaded.
 - A built-in `get_location` tool reporting the current location from the
   desktop's location service (GeoClue2 over the system D-Bus): latitude,
   longitude, accuracy, place description, and fix time. It sends no request to

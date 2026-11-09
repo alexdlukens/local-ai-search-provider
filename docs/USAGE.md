@@ -128,8 +128,9 @@ The complete settings reference is in the
 1. Press `Super` and start typing.
 2. Wait for the **AI Search** section. Queries shorter than two characters do
    not start a request.
-3. The answer streams into the result row. If the server is cold-starting a
-   model, the row shows **Loading model…** with a percentage when the server
+3. The answer streams into the result row. Opening the search already asks the
+   server to load a cold model, so the typing debounce does not delay the
+   load. The row shows **Loading model…** with a percentage when the server
    exposes `/v1/load-progress`.
 4. Metrics appear under the answer: time to first token, prompt processing and
    generation speed (tok/s), and token/context usage. They update while the

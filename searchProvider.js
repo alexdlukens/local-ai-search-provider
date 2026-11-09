@@ -173,6 +173,7 @@ export class AiSearchProvider {
         this._flushId = 0;
         this._serial = 0;
         this._requestCancellable = null;
+        this._preloadCancellable = null;
         this._shellCancellable = null;
         this._shellCancellableId = 0;
         this._modelWatch = null;
@@ -361,6 +362,10 @@ export class AiSearchProvider {
         this._searchActiveId = 0;
         this._store?.destroy();
         this._store = null;
+        if (this._preloadCancellable) {
+            this._preloadCancellable.cancel();
+            this._preloadCancellable = null;
+        }
         this._client.destroy();
         this._client = null;
         this._display = null;
@@ -385,13 +390,53 @@ export class AiSearchProvider {
 
         this._searchActiveId = this._searchController.connect(
             'notify::search-active', () => this._onSearchActiveChanged());
+        if (this._searchController.searchActive)
+            this._onSearchActiveChanged();
     }
 
     _onSearchActiveChanged() {
-        if (this._destroyed || this._searchController?.searchActive)
+        if (this._destroyed)
             return;
 
+        if (this._searchController?.searchActive) {
+            // Start loading a cold model as soon as the search opens instead
+            // of waiting for the typing debounce.
+            this._preloadModel().catch(logError);
+            return;
+        }
+
         this._abandonSearch();
+    }
+
+    /**
+     * Warm the configured model without sending a user query.
+     *
+     * Best-effort: a failure here is left for the real request to report, and
+     * a preload already in flight is kept because it may finish loading the
+     * model for the next query.
+     */
+    async _preloadModel() {
+        if (this._destroyed || !this._client || this._busy ||
+            this._preloadCancellable)
+            return;
+
+        const cancellable = new Gio.Cancellable();
+        this._preloadCancellable = cancellable;
+        try {
+            const baseUrl = normalizeEndpoint(
+                this._settings.get_string('endpoint'));
+            const apiKey = this._settings.get_string('api-key').trim();
+            const model = this._settings.get_string('model').trim();
+            await this._client.preloadModel({
+                baseUrl, apiKey, model, cancellable,
+            });
+        } catch {
+            // The search request path reports real connection or config
+            // errors; a background warm-up should stay silent.
+        } finally {
+            if (this._preloadCancellable === cancellable)
+                this._preloadCancellable = null;
+        }
     }
 
     // The user left the shell search (closed the overview, opened the app

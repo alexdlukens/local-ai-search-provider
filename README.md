@@ -40,7 +40,8 @@ MCP servers are opt-in and contacted only when enabled.
   a timestamp on each question; delete one chat from its history row or clear
   all of them after a confirmation.
 - Model loading status, including a percentage when the server exposes
-  `/v1/load-progress`.
+  `/v1/load-progress`. Opening the overview search starts loading a cold model
+  immediately, without waiting for the typing debounce.
 - Works with local servers that implement the OpenAI chat-completions API:
   Unsloth Studio, llama.cpp's `llama-server`, Ollama, and LM Studio.
 - Built-in tools for date/time, system information, your location from the
