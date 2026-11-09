@@ -1,9 +1,10 @@
 {
   "uuid": "ai-search@alexdlukens.github.io",
   "name": "AI Search",
-  "description": "Ask a local OpenAI-compatible model (Unsloth, llama.cpp, Ollama, LM Studio) directly from the GNOME Shell overview. Answers stream into the search results; open any answer for follow-up chats with saved history. Includes inline weather, country, Wikipedia, web search, page-fetch and currency tools, plus optional MCP servers.",
+  "description": "Ask a local OpenAI-compatible model (Unsloth, llama.cpp, Ollama, LM Studio) directly from the GNOME Shell overview. Answers stream into the search results; open any answer for follow-up chats with saved history. Copy answers to the clipboard. Includes inline weather, country, Wikipedia, web search, page-fetch and currency tools, plus optional MCP servers.",
   "shell-version": [
-    "50"
+    "50",
+    "51"
   ],
   "settings-schema": "org.gnome.shell.extensions.ai-search",
   "url": "https://github.com/alexdlukens/local-ai-search-provider",

@@ -60,10 +60,6 @@ pack: schemas
 		--schema=schemas/org.gnome.shell.extensions.ai-search.gschema.xml \
 		--extra-source=README.md \
 		--extra-source=LICENSE \
-		--extra-source=CHANGELOG.md \
-		--extra-source=SECURITY.md \
-		--extra-source=CONTRIBUTING.md \
-		--extra-source=docs \
 		.
 
 clean:

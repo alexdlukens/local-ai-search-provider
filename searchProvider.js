@@ -10,6 +10,8 @@ import {AiResultRow, AiHistoryRow} from './lib/resultView.js';
 import {OpenAIClient, normalizeEndpoint, ApiError} from './lib/openaiClient.js';
 import {runChat, buildMessages} from './lib/chatEngine.js';
 import {buildToolRegistry} from './lib/toolRegistry.js';
+import {resetToolState} from './lib/tools.js';
+import {resetMcpState} from './lib/mcp.js';
 import {ChatStore, titleFor} from './lib/chatStore.js';
 import {ModelWatch, formatModelState} from './lib/modelWatch.js';
 import {launchChatWindow} from './lib/launch.js';
@@ -27,8 +29,9 @@ const EXTENSION_DIR = GLib.path_get_dirname(
 
 // Search providers without an appInfo are rendered as a grid, which is a poor
 // fit for a long streamed answer. A lightweight stand-in gives us the list
-// layout (and a provider header with icon) without installing anything.
-const EXTENSION_APP_ID = 'org.gnome.Shell.Extensions.desktop';
+// layout (and a provider header with icon) without installing anything. It
+// reports the extension's own id rather than borrowing another app's.
+const EXTENSION_APP_ID = 'ai-search@alexdlukens.github.io';
 
 const AiAppInfo = GObject.registerClass({
     Implements: [Gio.AppInfo],
@@ -80,7 +83,8 @@ const AiAppInfo = GObject.registerClass({
     launch_uris(_uris, _context) {
     }
 
-    launch_uris_async(_uris, _context, _cancellable, _callback) {
+    launch_uris_async(_uris, _context, _cancellable, callback) {
+        callback(this, null);
     }
 
     launch_uris_finish(_result) {
@@ -366,9 +370,14 @@ export class AiSearchProvider {
             this._preloadCancellable.cancel();
             this._preloadCancellable = null;
         }
+        if (this._display) {
+            this._display.destroy();
+            this._display = null;
+        }
+        resetToolState();
+        resetMcpState();
         this._client.destroy();
         this._client = null;
-        this._display = null;
         this._settings = null;
         this._extension = null;
     }

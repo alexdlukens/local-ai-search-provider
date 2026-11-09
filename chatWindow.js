@@ -1,3 +1,4 @@
+#!/usr/bin/env -S gjs -m
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Standalone chat window, launched from the overview result. Runs in its own
 // process so GTK never shares a main loop with the shell's Clutter loop.

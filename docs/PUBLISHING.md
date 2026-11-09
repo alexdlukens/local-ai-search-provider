@@ -26,7 +26,7 @@ Set the description, homepage, and topics while it is still private:
 
 ```sh
 gh repo edit alexdlukens/local-ai-search-provider \
-  --description "AI answers from a local OpenAI-compatible model in the GNOME Shell 50 overview." \
+  --description "AI answers from a local OpenAI-compatible model in the GNOME Shell overview." \
   --homepage "https://github.com/alexdlukens/local-ai-search-provider" \
   --add-topic gnome-shell-extension \
   --add-topic gnome-shell \
@@ -82,26 +82,20 @@ gnome-extensions install --force ai-search@alexdlukens.github.io.shell-extension
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```
 
-## extensions.gnome.org (optional)
+## extensions.gnome.org
 
-Before submitting, note the license conflict:
+GNOME Shell is licensed `GPL-2.0-or-later`, and extensions must be distributed
+under compatible terms. The review guidelines explicitly accept
+`GPL-3.0-or-later`, which is this project's license, so no relicense is
+required:
 
-- The extensions.gnome.org upload form asks you to verify that the extension
-  can be distributed under **GPL-2.0-or-later**.
-- This project is licensed **GPL-3.0-or-later**. GPL-3.0-or-later code cannot be
-  relicensed as GPL-2.0-or-later, so that checkbox cannot honestly be ticked
-  without changing the license.
-- If EGO publication is a goal, relicense to GPL-2.0-or-later (or dual-license)
-  while you still own all the code, and update `LICENSE`, the README, and the
-  contributing guide. Do this before accepting outside contributions.
-- GitHub-only distribution is not affected by this requirement.
-
-If the license question is resolved:
+<https://gjs.guide/extensions/review-guidelines/review-guidelines.html#licensing>
 
 1. Log in at <https://extensions.gnome.org>.
 2. Upload the zip from `make pack`.
 3. Add a name, short description, and at least one screenshot.
-4. Select GNOME Shell 50 and confirm the license statement.
+4. Select the GNOME Shell versions listed in `metadata.json` and confirm the
+   license statement.
 5. Test the installed version from EGO, including preferences and the chat
    window.
 6. Keep `metadata.json` `shell-version` accurate for later uploads.

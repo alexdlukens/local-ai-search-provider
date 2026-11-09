@@ -9,7 +9,7 @@
 > it at your own risk. Model output can be wrong. Not affiliated with or
 > endorsed by GNOME.
 
-AI Search puts an OpenAI-compatible model in the GNOME Shell 50 overview. Type a
+AI Search puts an OpenAI-compatible model in the GNOME Shell overview. Type a
 question and the answer streams into the search results; click it to continue in
 a chat window with saved history.
 
@@ -29,7 +29,7 @@ metrics and the AI chat history row](docs/images/search_provider.png)
 
 ## Requirements
 
-- GNOME Shell 50 on Wayland. Older releases are not supported.
+- GNOME Shell 50 or 51 on Wayland. Older releases are not supported.
 - A reachable server implementing the OpenAI chat-completions API. **No model
   is included with this extension**: install a server and download a model
   yourself.
@@ -38,6 +38,11 @@ metrics and the AI chat history row](docs/images/search_provider.png)
 
 ## Install
 
+From <https://extensions.gnome.org>, install AI Search and enable it; no build
+tools or extra launcher are required.
+
+For a source install:
+
 ```sh
 git clone https://github.com/alexdlukens/local-ai-search-provider.git
 cd local-ai-search-provider
@@ -45,9 +50,9 @@ make install
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```
 
-`make install` also adds an **AI Chats** launcher; `make uninstall` removes the
-extension and the launcher. Log out and back in after installing, then open the
-settings:
+`make install` also adds an **AI Chats** launcher (source installs only);
+`make uninstall` removes the extension and the launcher. Log out and back in
+after installing, then open the settings:
 
 ```sh
 gnome-extensions prefs ai-search@alexdlukens.github.io

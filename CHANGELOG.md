@@ -82,8 +82,8 @@ Initial public release. AI-generated; see the disclaimer in the README.
 
 ### Added
 
-- GNOME Shell 50 search provider that streams answers from an OpenAI-compatible
-  server into the overview.
+- GNOME Shell 50 and 51 search provider that streams answers from an
+  OpenAI-compatible server into the overview.
 - Markdown rendering in the overview row and the chat window, including code
   blocks, lists, quotes, rules, and tables.
 - Follow-up chat window with saved conversation history, history browser, copy
