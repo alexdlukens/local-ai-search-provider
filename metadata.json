@@ -6,6 +6,6 @@
     "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.ai-search",
-  "url": "https://github.com/alexdlukens/gnome-ai-search",
+  "url": "https://github.com/alexdlukens/local-ai-search-provider",
   "version-name": "0.1.0"
 }

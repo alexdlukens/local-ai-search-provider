@@ -67,8 +67,8 @@ your queries, system prompt, and conversation history.
 ### From a source checkout
 
 ```sh
-git clone https://github.com/alexdlukens/gnome-ai-search.git
-cd gnome-ai-search
+git clone https://github.com/alexdlukens/local-ai-search-provider.git
+cd local-ai-search-provider
 make install
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```
@@ -146,10 +146,16 @@ While a request is in flight, typing a new query cancels the old one. The
 overview row only shows the final answer and its metrics; reasoning and tool
 cards appear in the chat window.
 
+![An answer streaming in the AI Search overview result row with metrics and the
+AI chat history row](images/search_provider.png)
+
 ## 5. Use the chat window
 
 The chat window is a separate GTK process, launched by clicking an answer or
 from the **AI Chats** app.
+
+![The chat window with a streamed answer, metrics, and the follow-up
+composer](images/chat_screen.png)
 
 - Type a follow-up in the composer and press `Enter` (or the send button).
 - Earlier turns are sent with each follow-up, so the model sees the
@@ -175,6 +181,9 @@ from the **AI Chats** app.
   speed, token usage, and context usage. They update live while the answer
   streams and are saved with the conversation, so reopening a chat shows the
   same values.
+
+![Chat history with a row per saved conversation, delete buttons, Clear All,
+and the new-chat button](images/chat_history.png)
 
 A new overview query always starts a new conversation. Use the chat window if
 you want to continue an existing one.

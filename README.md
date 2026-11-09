@@ -20,6 +20,10 @@ Super → "explain the difference between TCP and UDP" → live answer
       → click the answer → keep asking follow-ups → history is saved
 ```
 
+![The AI Search result row streaming an answer inside the GNOME Shell overview,
+with turn metrics underneath and the AI chat history row at the
+bottom](docs/images/search_provider.png)
+
 The model runs on your machine by default, with no account, telemetry, or
 hosted backend. The extension talks to whatever OpenAI-compatible server you
 configure. The built-in web data tools are enabled by default and contact
@@ -62,8 +66,8 @@ MCP servers are opt-in and contacted only when enabled.
 ## Install
 
 ```sh
-git clone https://github.com/alexdlukens/gnome-ai-search.git
-cd gnome-ai-search
+git clone https://github.com/alexdlukens/local-ai-search-provider.git
+cd local-ai-search-provider
 make install
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```
@@ -123,6 +127,12 @@ A new overview query starts a new conversation. Clicking the answer continues
 that conversation; the chat window's history button reopens older chats.
 Conversations are stored as plain JSON in
 `~/.local/share/ai-search/chats.json`.
+
+![The chat window with a streamed Markdown answer, per-turn metrics, and the
+follow-up composer](docs/images/chat_screen.png)
+
+![Chat history listing saved conversations, each with a delete button, plus the
+Clear All action and the new-chat button](docs/images/chat_history.png)
 
 ## Configuration
 

@@ -15,8 +15,8 @@ careful review and reproducible bug reports are especially valuable.
 ## Development setup
 
 ```sh
-git clone https://github.com/alexdlukens/gnome-ai-search.git
-cd gnome-ai-search
+git clone https://github.com/alexdlukens/local-ai-search-provider.git
+cd local-ai-search-provider
 make install
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```

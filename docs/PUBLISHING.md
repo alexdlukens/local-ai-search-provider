@@ -25,9 +25,9 @@ Use this before flipping the repository to public and before tagging a release.
 Set the description, homepage, and topics while it is still private:
 
 ```sh
-gh repo edit alexdlukens/gnome-ai-search \
+gh repo edit alexdlukens/local-ai-search-provider \
   --description "AI answers from a local OpenAI-compatible model in the GNOME Shell 50 overview." \
-  --homepage "https://github.com/alexdlukens/gnome-ai-search" \
+  --homepage "https://github.com/alexdlukens/local-ai-search-provider" \
   --add-topic gnome-shell-extension \
   --add-topic gnome-shell \
   --add-topic gnome \
@@ -42,7 +42,7 @@ gh repo edit alexdlukens/gnome-ai-search \
 Then change visibility in **Settings → General → Danger Zone**, or:
 
 ```sh
-gh repo edit alexdlukens/gnome-ai-search \
+gh repo edit alexdlukens/local-ai-search-provider \
   --visibility public \
   --accept-visibility-change-consequences
 ```
@@ -53,7 +53,7 @@ After the repository is public:
       security and analysis**, or:
 
       ```sh
-      gh api -X PUT repos/alexdlukens/gnome-ai-search/private-vulnerability-reporting
+      gh api -X PUT repos/alexdlukens/local-ai-search-provider/private-vulnerability-reporting
       ```
 
 - [ ] Enable secret scanning and push protection for the repository (free for
