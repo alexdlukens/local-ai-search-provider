@@ -52,9 +52,11 @@ Why two processes:
   the history flag, or a `--continue` flag. `Adw.Application` makes repeated
   launches activate the existing window instead of creating duplicates.
   `--continue` is sent when the saved conversation still ends on the user's
-  question (the overview result was activated before the debounce fired or
-  before any token arrived); the window then answers that turn as soon as it
-  opens.
+  question: the overview result was activated before the debounce fired,
+  before any token arrived, or while the answer was still streaming. In the
+  last case the partially streamed text is discarded, because a response
+  cannot be resumed mid-stream, and the window answers the question from the
+  start. The window answers that turn as soon as it opens.
 
 ## Request lifecycle
 
@@ -120,8 +122,9 @@ Key behaviors in `searchProvider.js`:
 - `LAUNCH_GUARD_MS` prevents a double activation from opening two windows.
 - Activating the answer or the history row calls `Main.overview.hide()` when
   the chat window is launched, so the window is visible without pressing
-  `Escape`. If the answer has not started streaming yet, the pending question
-  is handed to the chat window, which sends it immediately.
+  `Escape`. If the answer has not started streaming yet, or is still
+  streaming, the pending question is handed to the chat window, which answers
+  it immediately; a partially streamed answer is dropped rather than saved.
 
 The overview row is a `St.Button` containing a `St.BoxLayout`. It uses a
 lightweight `Gio.AppInfo` stand-in so the shell renders it as a full-width list

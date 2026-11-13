@@ -126,8 +126,10 @@ list.
 3. The answer streams into the row with live metrics: time to first token,
    prompt and generation speed, and token/context usage.
 4. Press `Enter` or click the answer to open the chat window; the overview
-   closes so the window is visible. If the answer has not started yet, the
-   chat window sends the question instead.
+   closes so the window is visible. If the answer has not started yet, or is
+   still streaming, the chat window answers the question itself so the turn
+   completes there. A partially streamed answer is discarded rather than saved
+   truncated.
 5. Typing a new query cancels the request in flight.
 
 The overview row shows only the final answer. Reasoning and tool results appear

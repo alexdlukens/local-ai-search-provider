@@ -305,8 +305,22 @@ export class AiSearchProvider {
         if (!this._guardLaunch())
             return;
 
+        // A turn that is still streaming cannot carry over: the request is
+        // owned by this process and OpenAI-compatible servers do not support
+        // resuming a partial assistant message. Drop the partial text and let
+        // the chat window answer the pending question, instead of saving half
+        // an answer and leaving the turn unfinished.
+        const interrupted = this._busy;
+
         this._cancelWork();
         this._stopModelWatch();
+        if (interrupted) {
+            this._answer = '';
+            this._reasoning = '';
+            this._reasoningActive = false;
+            this._metrics = null;
+            this._status = '';
+        }
         this._finalizeConversation(Boolean(this._conversation));
         this._busy = false;
 
@@ -316,9 +330,9 @@ export class AiSearchProvider {
             return;
         }
 
-        // If the debounce had not fired (or the answer was still streaming
-        // with nothing received yet), the saved conversation ends on the
-        // user's question. Ask the chat window to answer it there.
+        // If the debounce had not fired or the answer was still streaming, the
+        // saved conversation ends on the user's question. Ask the chat window
+        // to answer it there.
         const resume = this._conversation.messages.at(-1)?.role === 'user';
 
         try {

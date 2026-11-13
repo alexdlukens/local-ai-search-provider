@@ -76,6 +76,14 @@ All notable changes to this project are documented here. The format follows
 - The `open_application` built-in tool. GNOME Shell's application search is no
   longer intercepted.
 
+### Fixed
+
+- Pressing `Enter` on the overview answer while it is still streaming now
+  completes the turn in the chat window instead of leaving a truncated answer.
+  The partial text is discarded and the chat window answers the question from
+  the start, because an OpenAI-compatible response cannot be resumed
+  mid-stream.
+
 ## [0.1.0] - 2026-11-07
 
 Initial public release. AI-generated; see the disclaimer in the README.
