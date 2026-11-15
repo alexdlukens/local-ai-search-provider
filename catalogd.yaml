@@ -1,0 +1,109 @@
+schema_version: 1
+
+project:
+  slug: local-ai-search-provider
+  name: AI Search
+  summary: Ask a local OpenAI-compatible model from the GNOME Shell overview, with streaming answers and follow-up chats.
+  description: |
+    AI Search puts an OpenAI-compatible model in the GNOME Shell overview. Type
+    a question and the answer streams into the search results; open it to
+    continue in a chat window with saved history. It is a front end only — no
+    model is bundled, so you run a server such as
+    [Unsloth Studio](https://unsloth.ai/), llama.cpp, Ollama, or LM Studio.
+
+    > **AI-generated project.** The code has not been security-audited. The
+    > extension runs inside GNOME Shell with your full user privileges and can
+    > send data to the model, MCP, and web endpoints you configure.
+
+    ## Features
+
+    - Works with any server implementing the OpenAI chat-completions API:
+      Unsloth Studio, llama.cpp `llama-server`, Ollama, LM Studio, or your own
+    - Streaming Markdown answers in the overview and in a GTK chat window with
+      saved conversations, per-question timestamps, and delete/clear controls
+    - Live per-turn metrics: time to first token, prompt processing speed,
+      generation speed, and token/context usage
+    - Built-in read-only tools: date/time, system info, location, weather,
+      country data, Wikipedia, currency, web search, and page fetch; optional MCP
+      servers with a configurable tool-round cap
+    - Model warm-up when the overview search opens, plus loading progress when
+      the server exposes it
+    - Preferences for endpoint, model, API key, thinking/reasoning, system
+      prompt, metric or imperial units, and which tool groups are enabled
+    - No account, telemetry, or hosted backend. Web tools are enabled by default;
+      turn off **Enable web data tools** for a fully local setup
+
+    ## Requirements
+
+    - GNOME Shell 50 or 51 on Wayland; older releases are not supported
+    - A reachable server implementing `GET <base>/models` and
+      `POST <base>/chat/completions` with `stream: true`
+    - For source installs: `gjs`, `glib-compile-schemas` (usually
+      `libglib2.0-bin`), and the `gnome-extensions` CLI
+
+    ## Install
+
+    Install **AI Search** from
+    [extensions.gnome.org](https://extensions.gnome.org) and enable it; no build
+    tools are required. For a source install:
+
+    ```sh
+    git clone https://github.com/alexdlukens/local-ai-search-provider.git
+    cd local-ai-search-provider
+    make install
+    gnome-extensions enable ai-search@alexdlukens.github.io
+    ```
+
+    `make install` copies the extension into
+    `~/.local/share/gnome-shell/extensions/` and adds an **AI Chats** launcher
+    (source installs only); `make uninstall` removes both. Log out and back in
+    after installing or updating, then open the settings:
+
+    ```sh
+    gnome-extensions prefs ai-search@alexdlukens.github.io
+    ```
+
+    Set **Endpoint URL** to your server's base URL — a bare `host:port` gets
+    `http://` and `/v1` added. Leave **Model** on Auto, and enable tool calling
+    if your model supports function calling.
+
+    | Server | Typical base URL |
+    | --- | --- |
+    | Unsloth Studio | `http://127.0.0.1:8888/v1` |
+    | llama.cpp `llama-server` | `http://127.0.0.1:8080/v1` |
+    | Ollama | `http://127.0.0.1:11434/v1` |
+    | LM Studio | `http://127.0.0.1:1234/v1` |
+
+    ## Privacy
+
+    The model endpoint receives your query, system prompt, and prior turns.
+    Web tools send their arguments to Open-Meteo, the World Bank, Wikipedia,
+    Frankfurter, DuckDuckGo, or the page being fetched; MCP calls go to the
+    servers you configure. API keys and MCP headers are stored as plain text in
+    dconf and chat history is not encrypted, so keep the endpoint on loopback
+    unless you understand the exposure.
+
+    ## License
+
+    GNU General Public License v3.0 or later.
+  author: Alexander Lukens
+  homepage: https://github.com/alexdlukens/local-ai-search-provider
+  repository: https://github.com/alexdlukens/local-ai-search-provider
+  keywords:
+    - gnome
+    - gnome-shell
+    - search
+    - ai
+    - llm
+    - local
+    - ollama
+    - chat
+  categories:
+    - productivity
+    - utilities
+  links:
+    docs: https://github.com/alexdlukens/local-ai-search-provider/blob/main/docs/USAGE.md
+    issues: https://github.com/alexdlukens/local-ai-search-provider/issues
+    security: https://github.com/alexdlukens/local-ai-search-provider/blob/main/SECURITY.md
+
+visibility: public
