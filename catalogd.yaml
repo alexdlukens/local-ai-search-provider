@@ -87,6 +87,8 @@ project:
 
     GNU General Public License v3.0 or later.
   author: Alexander Lukens
+  type: plugin
+  language: JavaScript
   homepage: https://github.com/alexdlukens/local-ai-search-provider
   repository: https://github.com/alexdlukens/local-ai-search-provider
   keywords:
