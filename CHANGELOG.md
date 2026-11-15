@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A **Use imperial units** switch in preferences. It appends a metric or
+  imperial instruction to the system prompt, so answers use °F, miles, feet,
+  and pounds, and the model converts tool results such as °C weather. The
+  setting applies to both the overview and the chat window.
 - A dedicated icon for the **AI Chats** application. `make install` now
   installs the scalable SVG and 16–512 px PNG sizes into the user's hicolor
   icon theme, and the desktop entry uses it instead of a generic symbolic

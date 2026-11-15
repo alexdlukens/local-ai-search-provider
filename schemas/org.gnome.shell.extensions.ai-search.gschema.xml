@@ -34,6 +34,12 @@
       <description>Milliseconds to wait after the last keystroke before sending a request.</description>
     </key>
 
+    <key name="use-imperial-units" type="b">
+      <default>false</default>
+      <summary>Use imperial units</summary>
+      <description>Answer with imperial units (Fahrenheit, miles, feet, pounds) instead of metric. Tool results are converted by the model.</description>
+    </key>
+
     <key name="enable-thinking" type="b">
       <default>true</default>
       <summary>Enable thinking</summary>

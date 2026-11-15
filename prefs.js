@@ -536,6 +536,15 @@ export default class AiSearchPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         behaviourGroup.add(reasoningRow);
 
+        const imperialUnitsRow = new Adw.SwitchRow({
+            title: 'Use imperial units',
+            subtitle: 'Answer with °F, miles, feet, and pounds instead of °C, ' +
+                'kilometres, and kilograms. Tool results are converted for you.',
+        });
+        settings.bind('use-imperial-units', imperialUnitsRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        behaviourGroup.add(imperialUnitsRow);
+
         const systemPromptRow = addResettableEntry(
             behaviourGroup, settings, 'system-prompt', 'System prompt');
         cleanup.push(systemPromptRow.destroy);

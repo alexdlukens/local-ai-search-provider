@@ -108,6 +108,7 @@ gnome-extensions prefs ai-search@alexdlukens.github.io
 | Debounce | 400 ms | Wait after typing stops, on top of the shell's own 150 ms. |
 | Enable thinking / reasoning | on | Sends `enable_thinking: false` and `reasoning_effort: none` when disabled. Servers without support ignore it. |
 | Show reasoning / thinking | off | Displays `reasoning_content` above the answer. Requires thinking. |
+| Use imperial units | off | Asks for °F, miles, feet, and pounds instead of metric; tool results are converted. |
 | Enable tool calling | on | Lets the model call tools via function calling. |
 | Enable web data tools | on | Weather, country data, Wikipedia, currency, web search, and page fetch. |
 | Enable MCP tools | off | Discovers tools from the configured MCP servers. |

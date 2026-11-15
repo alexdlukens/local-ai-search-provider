@@ -1231,7 +1231,8 @@ class ChatWindow {
 
             const messages = buildMessages(
                 this._settings.get_string('system-prompt'),
-                this._conversation.messages);
+                this._conversation.messages,
+                {imperialUnits: this._settings.get_boolean('use-imperial-units')});
 
             for await (const event of runChat({
                 client: this._client,

@@ -134,7 +134,8 @@ result rather than an application grid tile.
 
 `lib/chatEngine.js` is shared by the overview and the chat window.
 
-1. `buildMessages()` prepends the system prompt and keeps only `user` and
+1. `buildMessages()` prepends the system prompt, appends the metric or imperial
+   instruction selected by `use-imperial-units`, and keeps only `user` and
    `assistant` turns with non-empty text.
 2. `OpenAIClient.streamChat()` sends `stream: true` and parses SSE `data:`
    frames. It also handles servers that ignore streaming and return one JSON
