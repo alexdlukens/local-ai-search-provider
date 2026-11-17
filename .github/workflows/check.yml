@@ -27,7 +27,7 @@ jobs:
         run: make check
 
       - name: Upload extension zip
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ai-search-extension
           path: dist/*.shell-extension.zip
