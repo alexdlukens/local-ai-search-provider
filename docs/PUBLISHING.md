@@ -16,8 +16,8 @@ Use this before flipping the repository to public and before tagging a release.
 
 - [ ] The README opens with the AI-generated disclaimer.
 - [ ] `metadata.json` has the public UUID, URL, and version name.
-- [ ] Screenshots are ready for the listing: at least one overview and one
-      chat-window image. extensions.gnome.org looks much better with both.
+- [ ] Screenshots are ready for the README: at least one overview and one
+      chat-window image.
 - [ ] Chats and settings used during testing are not committed.
 
 ## Make the repository public
@@ -64,15 +64,16 @@ After the repository is public:
 
 ## Tag a release
 
+The `release` workflow (`.github/workflows/release.yml`) builds the extension
+zip and attaches it to the GitHub release. The tag must be `v` plus
+`version-name` from `metadata.json`; the workflow fails otherwise.
+
 ```sh
 make check
 git tag -a v0.1.0 -m "AI Search 0.1.0"
-git push origin master
-git push origin v0.1.0
-gh release create v0.1.0 \
-  dist/ai-search@alexdlukens.github.io.shell-extension.zip \
-  --title "AI Search 0.1.0" \
-  --notes-file CHANGELOG.md
+git push origin master v0.1.0
+gh release create v0.1.0 --title "AI Search 0.1.0" \
+  --notes-file <(awk '/^## \[0\.1\.0\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
 ```
 
 Users can install the attached zip with:
@@ -81,24 +82,6 @@ Users can install the attached zip with:
 gnome-extensions install --force ai-search@alexdlukens.github.io.shell-extension.zip
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```
-
-## extensions.gnome.org
-
-GNOME Shell is licensed `GPL-2.0-or-later`, and extensions must be distributed
-under compatible terms. The review guidelines explicitly accept
-`GPL-3.0-or-later`, which is this project's license, so no relicense is
-required:
-
-<https://gjs.guide/extensions/review-guidelines/review-guidelines.html#licensing>
-
-1. Log in at <https://extensions.gnome.org>.
-2. Upload the zip from `make pack`.
-3. Add a name, short description, and at least one screenshot.
-4. Select the GNOME Shell versions listed in `metadata.json` and confirm the
-   license statement.
-5. Test the installed version from EGO, including preferences and the chat
-   window.
-6. Keep `metadata.json` `shell-version` accurate for later uploads.
 
 ## Post-public checks
 
