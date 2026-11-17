@@ -33,15 +33,13 @@ metrics and the AI chat history row](docs/images/search_provider.png)
 - A reachable server implementing the OpenAI chat-completions API. **No model
   is included with this extension**: install a server and download a model
   yourself.
-- For source installs: `gjs`, `glib-compile-schemas` (usually
-  `libglib2.0-bin`), and the `gnome-extensions` CLI.
+- `gjs`, `glib-compile-schemas` (usually `libglib2.0-bin`), and the
+  `gnome-extensions` CLI.
 
 ## Install
 
-From <https://extensions.gnome.org>, install AI Search and enable it; no build
-tools or extra launcher are required.
-
-For a source install:
+AI Search is installed from source; it is not distributed on
+extensions.gnome.org.
 
 ```sh
 git clone https://github.com/alexdlukens/local-ai-search-provider.git
@@ -50,9 +48,9 @@ make install
 gnome-extensions enable ai-search@alexdlukens.github.io
 ```
 
-`make install` also adds an **AI Chats** launcher (source installs only);
-`make uninstall` removes the extension and the launcher. Log out and back in
-after installing, then open the settings:
+`make install` also adds an **AI Chats** launcher; `make uninstall` removes
+the extension and the launcher. Log out and back in after installing, then
+open the settings:
 
 ```sh
 gnome-extensions prefs ai-search@alexdlukens.github.io

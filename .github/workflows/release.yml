@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach the extension zip to (for example v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  extension:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - name: Install GNOME build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gjs \
+            libglib2.0-bin \
+            gnome-shell
+      - name: Verify tag matches metadata version
+        run: |
+          version="$(jq -r '."version-name"' metadata.json)"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::ref $TAG does not match metadata.json version-name $version"
+            exit 1
+          fi
+      - name: Build extension zip
+        run: make pack
+      - name: Verify zip contents
+        run: |
+          unzip -l dist/*.shell-extension.zip
+          unzip -l dist/*.shell-extension.zip | grep -q 'metadata.json'
+          unzip -l dist/*.shell-extension.zip | grep -q 'gschema.xml'
+      - name: Upload extension zip to release
+        run: gh release upload "$TAG" dist/*.shell-extension.zip --clobber

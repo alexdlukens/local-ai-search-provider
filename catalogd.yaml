@@ -43,9 +43,8 @@ project:
 
     ## Install
 
-    Install **AI Search** from
-    [extensions.gnome.org](https://extensions.gnome.org) and enable it; no build
-    tools are required. For a source install:
+    AI Search is installed from source; it is not distributed on
+    extensions.gnome.org.
 
     ```sh
     git clone https://github.com/alexdlukens/local-ai-search-provider.git
@@ -55,9 +54,9 @@ project:
     ```
 
     `make install` copies the extension into
-    `~/.local/share/gnome-shell/extensions/` and adds an **AI Chats** launcher
-    (source installs only); `make uninstall` removes both. Log out and back in
-    after installing or updating, then open the settings:
+    `~/.local/share/gnome-shell/extensions/` and adds an **AI Chats** launcher;
+    `make uninstall` removes both. Log out and back in after installing or
+    updating, then open the settings:
 
     ```sh
     gnome-extensions prefs ai-search@alexdlukens.github.io
