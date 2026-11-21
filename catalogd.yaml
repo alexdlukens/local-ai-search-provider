@@ -3,12 +3,12 @@ schema_version: 1
 project:
   slug: local-ai-search-provider
   name: AI Search
-  summary: Ask a local OpenAI-compatible model from the GNOME Shell overview, with streaming answers and follow-up chats.
+  summary: Ask a local OpenAI-compatible model from the GNOME Shell overview, with click-to-load chats.
   description: |
     AI Search puts an OpenAI-compatible model in the GNOME Shell overview. Type
-    a question and the answer streams into the search results; open it to
-    continue in a chat window with saved history. It is a front end only — no
-    model is bundled, so you run a server such as
+    a question, then open the AI Search entry in a chat window; the model loads
+    only then and the answer streams there with saved history. It is a front
+    end only — no model is bundled, so you run a server such as
     [Unsloth Studio](https://unsloth.ai/), llama.cpp, Ollama, or LM Studio.
 
     > **AI-generated project.** The code has not been security-audited. The
@@ -19,15 +19,15 @@ project:
 
     - Works with any server implementing the OpenAI chat-completions API:
       Unsloth Studio, llama.cpp `llama-server`, Ollama, LM Studio, or your own
-    - Streaming Markdown answers in the overview and in a GTK chat window with
-      saved conversations, per-question timestamps, and delete/clear controls
+    - Streaming Markdown answers in a GTK chat window with saved conversations,
+      per-question timestamps, and delete/clear controls
     - Live per-turn metrics: time to first token, prompt processing speed,
       generation speed, and token/context usage
     - Built-in read-only tools: date/time, system info, location, weather,
       country data, Wikipedia, currency, web search, and page fetch; optional MCP
       servers with a configurable tool-round cap
-    - Model warm-up when the overview search opens, plus loading progress when
-      the server exposes it
+    - Model loading starts only when you open the AI Search entry; loading
+      progress appears when the server exposes it
     - Preferences for endpoint, model, API key, thinking/reasoning, system
       prompt, metric or imperial units, and which tool groups are enabled
     - No account, telemetry, or hosted backend. Web tools are enabled by default;

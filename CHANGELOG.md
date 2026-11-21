@@ -10,15 +10,11 @@ All notable changes to this project are documented here. The format follows
 
 - A **Use imperial units** switch in preferences. It appends a metric or
   imperial instruction to the system prompt, so answers use °F, miles, feet,
-  and pounds, and the model converts tool results such as °C weather. The
-  setting applies to both the overview and the chat window.
+  and pounds, and the model converts tool results such as °C weather.
 - A dedicated icon for the **AI Chats** application. `make install` now
   installs the scalable SVG and 16–512 px PNG sizes into the user's hicolor
   icon theme, and the desktop entry uses it instead of a generic symbolic
   icon. `make icons` regenerates the committed PNGs from `data/ai-search.svg`.
-- Opening the overview search now starts loading a cold model immediately,
-  without waiting for the typing debounce. The warm-up is skipped when the
-  server reports the model as already loaded.
 - A built-in `get_location` tool reporting the current location from the
   desktop's location service (GeoClue2 over the system D-Bus): latitude,
   longitude, accuracy, place description, and fix time. It sends no request to
@@ -37,11 +33,10 @@ All notable changes to this project are documented here. The format follows
   built-in default prompt. It is insensitive while the default is already in
   effect, and it drops the stored override instead of writing the default back,
   so future default changes still reach the user.
-- Live per-turn metrics in the overview answer row and the chat window: time
-  to first token, prompt processing speed, generation speed, and token/context
-  usage. Generated token counts fall back to estimates when the server
-  reports none. Metrics are saved with chat history and reappear when a chat
-  is reopened.
+- Live per-turn metrics in the chat window: time to first token, prompt
+  processing speed, generation speed, and token/context usage. Generated
+  token counts fall back to estimates when the server reports none. Metrics
+  are saved with chat history and reappear when a chat is reopened.
 - Deleting a single saved chat from its history row without opening it, and
   clearing every saved chat with the **Clear All** button after confirming in
   a dialog. Deleting the open chat resets the window to a new empty chat, and
@@ -52,25 +47,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Opening the overview or typing a query no longer loads the model or sends a
+  request. The **AI Search** row is static and says **Press Enter to open
+  chat**; activating it saves the question as a user turn and opens the **AI
+  Chats** window, which loads the model and streams the answer there.
 - The default system prompt now points the model at `web_search` and
   `fetch_url` for current or general information, with Wikipedia as the
   encyclopedic fallback.
-- Opening the chat window before the answer starts streaming (for example by
-  pressing `Enter` while the query is still inside the typing debounce) now
-  sends the pending question from the chat window instead of leaving it
-  unanswered.
 - The default system prompt now instructs the model to treat its knowledge as
   stale: for time-sensitive questions (current events, office holders, prices,
   releases, versions, scores, statistics) it must call a tool — Wikipedia,
   weather, currency, country data, or `get_datetime` — and answer from the
   result instead of memory, and to flag the answer as possibly out of date when
   no tool can confirm it.
-- Opening the chat window from the overview answer or history row now
+- Opening the chat window from the overview result or history row now
   dismisses the overview search, so no `Escape` is needed.
-- Leaving the overview search without opening the answer — hiding the
-  overview, opening the app grid, launching another result, or clearing the
-  query — now cancels the in-flight answer. The partial reply is discarded and
-  is not written to chat history.
 - The **AI chat history** row in the overview now shows how many chats were
   active today (for example **5 chats today**) instead of the total number of
   saved chats. An empty history still says **No saved chats yet**.
@@ -79,14 +70,6 @@ All notable changes to this project are documented here. The format follows
 
 - The `open_application` built-in tool. GNOME Shell's application search is no
   longer intercepted.
-
-### Fixed
-
-- Pressing `Enter` on the overview answer while it is still streaming now
-  completes the turn in the chat window instead of leaving a truncated answer.
-  The partial text is discarded and the chat window answers the question from
-  the start, because an OpenAI-compatible response cannot be resumed
-  mid-stream.
 
 ## [0.1.0] - 2026-11-07
 

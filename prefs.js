@@ -509,14 +509,8 @@ export default class AiSearchPreferences extends ExtensionPreferences {
         // --- Behaviour ------------------------------------------------------
         const behaviourGroup = new Adw.PreferencesGroup({
             title: 'Behaviour',
-            description: 'The search provider waits for you to stop typing before ' +
-                'sending a request.',
         });
         page.add(behaviourGroup);
-
-        const debounce = addSpin(behaviourGroup, settings, 'debounce-ms',
-            'Debounce', 'Milliseconds to wait after typing stops', 0, 3000, 50);
-        cleanup.push(() => debounce.row.disconnect(debounce.changedId));
 
         const thinkingRow = new Adw.SwitchRow({
             title: 'Enable thinking / reasoning',

@@ -10,16 +10,12 @@
 > endorsed by GNOME.
 
 AI Search puts an OpenAI-compatible model in the GNOME Shell overview. Type a
-question and the answer streams into the search results; click it to continue in
-a chat window with saved history.
-
-![AI Search streaming an answer inside the GNOME Shell overview, with turn
-metrics and the AI chat history row](docs/images/search_provider.png)
+question to get an **AI Search** row, then press `Enter` to open a chat window
+with saved history; the model loads and the answer streams there.
 
 - Works with any OpenAI-compatible server: Unsloth Studio, llama.cpp, Ollama,
   LM Studio, or your own.
-- Streaming Markdown answers in the overview and in a GTK chat window with
-  saved conversations.
+- Streaming Markdown answers in a GTK chat window with saved conversations.
 - Live per-turn metrics: time to first token, prompt and generation speed, and
   token/context usage.
 - Read-only built-in tools: date/time, system info, location, weather, country
@@ -72,9 +68,11 @@ Development and testing used the **Gemma4 E2B** model running locally in
 
 ## Use
 
-Press `Super` and type. The answer streams into the **AI Search** row; press
-`Enter` or click it to open the chat window. The **AI chat history** row lists
-saved conversations, and the **AI Chats** app opens the window directly.
+Press `Super` and type at least two characters. An **AI Search** row appears
+saying **Press Enter to open chat**; nothing is sent to the model yet. Press
+`Enter` or click the row to open the chat window, which loads the model if
+needed and streams the answer there. The **AI chat history** row lists saved
+conversations, and the **AI Chats** app opens the window directly.
 
 Each overview query starts a new conversation. Chats are stored as plain JSON in
 `~/.local/share/ai-search/chats.json`.

@@ -27,13 +27,6 @@
       <description>Instruction prepended to every query.</description>
     </key>
 
-    <key name="debounce-ms" type="i">
-      <default>400</default>
-      <range min="0" max="3000"/>
-      <summary>Typing debounce</summary>
-      <description>Milliseconds to wait after the last keystroke before sending a request.</description>
-    </key>
-
     <key name="use-imperial-units" type="b">
       <default>false</default>
       <summary>Use imperial units</summary>

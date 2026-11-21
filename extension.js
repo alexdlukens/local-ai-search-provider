@@ -7,8 +7,7 @@ import {AiSearchProvider} from './searchProvider.js';
 
 export default class AiSearchExtension extends Extension {
     enable() {
-        this._settings = this.getSettings();
-        this._provider = new AiSearchProvider(this, this._settings);
+        this._provider = new AiSearchProvider(this);
         Main.overview.searchController.addProvider(this._provider);
     }
 
@@ -18,6 +17,5 @@ export default class AiSearchExtension extends Extension {
             this._provider.destroy();
             this._provider = null;
         }
-        this._settings = null;
     }
 }

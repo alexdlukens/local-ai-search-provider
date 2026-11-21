@@ -14,32 +14,29 @@ flowchart LR
     subgraph Shell["gnome-shell process"]
         EP[extension.js] --> SP[searchProvider.js]
         SP --> RV[lib/resultView.js]
-        SP --> CE[lib/chatEngine.js]
-        SP --> OC[lib/openaiClient.js]
-        SP --> TR[lib/toolRegistry.js]
-        TR --> TL[lib/tools.js]
-        TR --> MC[lib/mcp.js]
         SP --> CS[lib/chatStore.js]
+        SP --> LN[lib/launch.js]
     end
 
     subgraph Chat["gjs chatWindow.js process"]
-        CW[Adw chat window] --> CE
-        CW --> OC
-        CW --> TR
+        CW[Adw chat window] --> CE[lib/chatEngine.js]
+        CW --> OC[lib/openaiClient.js]
+        CW --> TR[lib/toolRegistry.js]
         CW --> CS
         CW --> MD[lib/markdown.js]
     end
 
     MX[lib/metrics.js]
-    SP --> MX
     CW --> MX
 
     CE --> OC
+    TR --> TL[lib/tools.js]
+    TR --> MC[lib/mcp.js]
     OC -->|"SSE / JSON"| MS[(OpenAI-compatible server)]
     TL -->|HTTPS| WEB[(Open-Meteo, World Bank,<br/>Wikipedia, Frankfurter,<br/>DuckDuckGo, fetched pages)]
     MC -->|"Streamable HTTP"| MCP[(MCP servers)]
     CS -->|"read/write"| JSON[(chats.json)]
-    SP -->|"subprocess"| CW
+    LN -->|"subprocess"| CW
 ```
 
 Why two processes:
@@ -51,46 +48,38 @@ Why two processes:
 - `lib/launch.js` starts `gjs -m chatWindow.js` and forwards a conversation ID,
   the history flag, or a `--continue` flag. `Adw.Application` makes repeated
   launches activate the existing window instead of creating duplicates.
-  `--continue` is sent when the saved conversation still ends on the user's
-  question: the overview result was activated before the debounce fired,
-  before any token arrived, or while the answer was still streaming. In the
-  last case the partially streamed text is discarded, because a response
-  cannot be resumed mid-stream, and the window answers the question from the
-  start. The window answers that turn as soon as it opens.
+  `--continue` is sent when activating the overview result: the provider hands
+  over a conversation that ends on the user's question, and the window answers
+  that turn as soon as it opens.
 
 ## Request lifecycle
+
+The overview provider never talks to the model. It forwards the typed question
+to the chat window, which owns the request.
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant P as SearchProvider
-    participant C as OpenAIClient
-    participant S as Model server
-    participant R as Result row
+    participant S as ChatStore
+    participant L as launch.js
+    participant W as Chat window
+    participant M as Model server
 
-    U->>P: type query
-    P->>P: cancel previous, reset state, debounce
-    P->>C: GET /models (if model is Auto)
-    C->>S: GET /models
-    S-->>C: model list
-    P->>C: GET /props or /models (context window, best effort)
-    C->>S: GET /props or /models
-    S-->>C: n_ctx / max_model_len if exposed
-    P->>R: "Loading model…" (optional progress poll)
-    P->>P: metrics start (t0 for TTFT)
-    P->>C: POST /chat/completions (stream, include_usage)
-    C->>S: request
-    loop SSE chunks
-        S-->>C: data: {choices:[{delta}]}
-        C-->>P: content / reasoning
-        P->>R: throttled render every 60 ms
-        P->>P: first delta → TTFT measured client-side
-        P->>R: throttled metrics render
-    end
-    S-->>C: final chunk with usage / timings
-    C-->>P: token counts and tok/s
-    P->>R: final metrics
-    P->>P: persist conversation with metrics
+    U->>P: type query (2+ characters)
+    P->>P: build user-only conversation
+    P->>P: render static row ("Press Enter to open chat")
+    Note over P,M: no request and no model load
+    U->>P: activate the AI Search row
+    P->>S: upsert conversation (user turn only)
+    P->>L: conversation ID, --continue
+    L->>W: gjs -m chatWindow.js
+    P->>P: Main.overview.hide()
+    W->>S: load conversation
+    W->>M: GET /models, then POST /chat/completions (stream)
+    M-->>W: SSE chunks
+    W->>W: render answer and metrics
+    W->>S: save conversation with metrics
 ```
 
 The provider is created in `extension.js` and registered with
@@ -99,40 +88,32 @@ The provider is created in `extension.js` and registered with
 
 Key behaviors in `searchProvider.js`:
 
-- Queries shorter than two characters produce no AI request.
-- `getInitialResultSet()` cancels any in-flight request, resets the answer, and
-  schedules a new one after the configured debounce.
-- A monotonically increasing `_serial` prevents a late response from an older
-  query from overwriting a newer one.
+- Queries shorter than two characters return no results, so neither the AI row
+  nor the history row appears.
+- `getInitialResultSet()` keeps a conversation in memory with the typed
+  question as its only message and renders the row. It sends no request, loads
+  no model, and writes nothing to disk.
+- The row is static: `AiResultRow` shows the title and **Press Enter to open
+  chat**. No answer, reasoning, metrics, or spinner is rendered in the shell
+  process.
 - The shell caches result actors per result ID, so `AiResultRow` is updated in
   place instead of being recreated on every keystroke.
-- Rendering is throttled (`FLUSH_INTERVAL_MS = 60`) while streaming.
-- Answer and reasoning text are capped (`MAX_ANSWER_CHARS`,
-  `MAX_REASONING_CHARS`) before rendering.
-- Disabling the extension cancels requests, stops the model watcher, finalizes
-  the conversation, and destroys the chat store and HTTP client.
-- The provider watches `Main.overview.searchController`'s `search-active`
-  property. When it turns true, `OpenAIClient.preloadModel()` warms the
-  configured model before any query is typed: it skips models that `/models`
-  reports as loaded and otherwise sends a one-token completion, the portable
-  way to make an OpenAI-compatible server load a cold model. When it turns
-  false without the answer row being activated (overview hidden, app grid
-  opened, another result launched, query cleared), the in-flight request is
-  cancelled and the partial turn is dropped instead of being saved.
+- Activating `ai-answer` saves the conversation (a single user turn), launches
+  the chat window with its ID and `--continue`, and hides the overview, so the
+  window is visible without pressing `Escape`. The window loads the model and
+  streams the answer.
+- Activating `ai-chat-history` launches the window with `--history`.
 - `LAUNCH_GUARD_MS` prevents a double activation from opening two windows.
-- Activating the answer or the history row calls `Main.overview.hide()` when
-  the chat window is launched, so the window is visible without pressing
-  `Escape`. If the answer has not started streaming yet, or is still
-  streaming, the pending question is handed to the chat window, which answers
-  it immediately; a partially streamed answer is dropped rather than saved.
+- Disabling the extension destroys the result row display and the chat store.
 
-The overview row is a `St.Button` containing a `St.BoxLayout`. It uses a
-lightweight `Gio.AppInfo` stand-in so the shell renders it as a full-width list
-result rather than an application grid tile.
+The overview row is a `St.Button` containing a horizontal `St.BoxLayout` with
+an icon, the title, and the status label. It uses a lightweight `Gio.AppInfo`
+stand-in so the shell renders it as a full-width list result rather than an
+application grid tile.
 
 ## Chat loop and tools
 
-`lib/chatEngine.js` is shared by the overview and the chat window.
+`lib/chatEngine.js` runs in the chat window.
 
 1. `buildMessages()` prepends the system prompt, appends the metric or imperial
    instruction selected by `use-imperial-units`, and keeps only `user` and
@@ -224,7 +205,7 @@ MCP tool output is converted to text and truncated to the same
 - Writes create the parent directory with mode `0700`, write a `.tmp` file, then
   atomically move it over the real file.
 - A `Gio.FileMonitor` invalidates the in-memory cache when the other process
-  writes, so the overview and chat window see each other's changes.
+  writes, so the history row and the chat window see each other's changes.
 - At most 100 conversations are kept, sorted by `updated`.
 - `clear()` empties the list and rewrites the file as
   `{version: 1, conversations: []}`; `remove(id)` drops a single conversation.
@@ -259,7 +240,7 @@ The GSettings schema is
 `prefs.js` builds an Adwaita preferences window with:
 
 - server endpoint, API key, model discovery, and reachability check;
-- debounce, thinking, reasoning, and tool switches;
+- thinking, reasoning, and tool switches;
 - chat history access;
 - web tool and MCP configuration, including a save-and-test action;
 - a note about plain-text secret storage.
@@ -281,8 +262,9 @@ platform libraries already present on a GNOME Shell system.
 
 ## Known design tradeoffs
 
-- The overview row is single-answer by design; the chat window is the place for
-  transcripts and tool details.
+- The overview is a launcher, not a viewer: the shell process never calls the
+  model. The chat window owns every request, transcript, and tool detail, and
+  loading starts when it opens.
 - The extension does not manage model servers or downloads. This keeps it
   compatible with Unsloth Studio, llama.cpp, Ollama, LM Studio, and anything
   else that speaks the same API, but startup/loading is the server's job.

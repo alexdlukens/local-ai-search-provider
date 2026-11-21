@@ -105,7 +105,6 @@ gnome-extensions prefs ai-search@alexdlukens.github.io
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| Debounce | 400 ms | Wait after typing stops, on top of the shell's own 150 ms. |
 | Enable thinking / reasoning | on | Sends `enable_thinking: false` and `reasoning_effort: none` when disabled. Servers without support ignore it. |
 | Show reasoning / thinking | off | Displays `reasoning_content` above the answer. Requires thinking. |
 | Use imperial units | off | Asks for °F, miles, feet, and pounds instead of metric; tool results are converted. |
@@ -120,24 +119,19 @@ list.
 
 ## 4. Ask from the overview
 
-1. Press `Super` and type. Queries shorter than two characters send no request.
-2. Opening the search already asks the server to load a cold model, so the
-   debounce does not delay loading. The row shows **Loading model…**, with a
-   percentage when the server exposes `/v1/load-progress`.
-3. The answer streams into the row with live metrics: time to first token,
-   prompt and generation speed, and token/context usage.
-4. Press `Enter` or click the answer to open the chat window; the overview
-   closes so the window is visible. If the answer has not started yet, or is
-   still streaming, the chat window answers the question itself so the turn
-   completes there. A partially streamed answer is discarded rather than saved
-   truncated.
-5. Typing a new query cancels the request in flight.
+1. Press `Super` and type at least two characters. A shorter query shows no AI
+   row.
+2. The **AI Search** row appears with **Press Enter to open chat**. Typing does
+   not load the model or send a request, and the row never streams an answer.
+3. Press `Enter` or click the row. The overview closes and the chat window
+   opens with your question as the first user turn. The model loads there —
+   the window shows **Loading model…**, with a percentage when the server
+   exposes `/v1/load-progress` — and the answer streams in as usual.
+4. Reopen the window from the **AI chat history** row or the **AI Chats** app to
+   continue the conversation.
 
-The overview row shows only the final answer. Reasoning and tool results appear
-in the chat window.
-
-![An answer streaming in the AI Search overview row with metrics and the AI
-chat history row](images/search_provider.png)
+Reasoning, tool results, and metrics appear in the chat window, not in the
+overview. The **AI chat history** row lists saved conversations.
 
 ## 5. Use the chat window
 
@@ -260,7 +254,8 @@ file.
 ### "Loading model…" never finishes
 
 The server may still be loading a large model; watch its logs. Without
-`/v1/load-progress` the row cannot show a percentage. Try a smaller model.
+`/v1/load-progress` the chat window cannot show a percentage. Try a smaller
+model.
 
 ### The model answers but tools never run
 
