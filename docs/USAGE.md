@@ -139,7 +139,8 @@ overview. The **AI chat history** row lists saved conversations.
 composer](images/chat_screen.png)
 
 - Type a follow-up and press `Enter` or the send button. Earlier turns are sent
-  with each request.
+  with each request. While the reply streams, the send button turns into a
+  **Stop** button that cancels the request.
 - Each question shows the date and time it was asked; the timestamp is saved
   with the chat.
 - The history button lists saved conversations. Select one to reopen it; use

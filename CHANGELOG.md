@@ -41,6 +41,10 @@ All notable changes to this project are documented here. The format follows
   clearing every saved chat with the **Clear All** button after confirming in
   a dialog. Deleting the open chat resets the window to a new empty chat, and
   **Clear All** is insensitive when nothing is saved.
+- The chat window's Send button becomes a **Stop** button while a reply is
+  streaming. Clicking it cancels the request, keeps any partial answer in the
+  transcript and saved chat, and removes an assistant turn that produced no
+  text.
 - A date and time stamp on every user question in the chat window, saved in
   `chats.json` as `ts` (epoch milliseconds) so reopened chats show the original
   times. Chats saved before this change show no timestamp.

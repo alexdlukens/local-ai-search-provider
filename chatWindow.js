@@ -365,7 +365,8 @@ class ChatWindow {
             tooltip_text: 'Send',
         });
         this._sendButton.add_css_class('suggested-action');
-        this._sendButton.connect('clicked', () => this._send());
+        this._sendButton.connect('clicked', () =>
+            this._busy ? this._cancelRequest() : this._send());
         composer.append(this._sendButton);
 
         footer.append(composer);
@@ -1367,7 +1368,13 @@ class ChatWindow {
         this._busy = busy;
         this._spinner.set_spinning(busy);
         this._spinner.set_visible(busy);
-        this._sendButton.set_sensitive(!busy);
+        this._sendButton.set_icon_name(
+            busy ? 'window-close-symbolic' : 'go-next-symbolic');
+        this._sendButton.set_tooltip_text(busy ? 'Stop' : 'Send');
+        if (busy)
+            this._sendButton.remove_css_class('suggested-action');
+        else
+            this._sendButton.add_css_class('suggested-action');
         if (!busy && this._stack.visible_child_name === 'chat')
             this._entry.grab_focus();
     }
